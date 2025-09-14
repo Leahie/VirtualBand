@@ -8,7 +8,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Upload, File, X, Music, Mic, Video } from "lucide-react";
+import { Upload, X, Music, Mic, Video } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import {uploadFileAndCreateBand, uploadFileToS3} from "@/lib/api";
@@ -162,12 +162,6 @@ export const UploadModal: React.FC<UploadModalProps> = ({
       return;
     }
 
-    // Here you would typically process the files and create the band
-    toast({
-      title: "Band created successfully!",
-      description: `${bandName} is being processed. You'll be notified when it's ready.`,
-    });
-    
     // Reset form
     setBandName("");
     setUploadedFiles([]);

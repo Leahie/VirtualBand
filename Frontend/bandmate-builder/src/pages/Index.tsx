@@ -25,8 +25,8 @@ const Index = () => {
             <a href="#how-it-works" className="text-foreground/80 hover:text-foreground transition-colors">
               How It Works
             </a>
-            <Button variant="ghost">Sign In</Button>
-            <Button variant="hero">Get Started</Button>
+            {/* <Button variant="ghost">Sign In</Button> */}
+            {/* <Button variant="hero">Get Started</Button> */}
           </div>
         </div>
       </nav>

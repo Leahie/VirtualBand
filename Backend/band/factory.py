@@ -1,15 +1,16 @@
 import os
 
 from flask import Flask, render_template
-from flask.json import JSONEncoder
+from json import JSONEncoder
 from flask_cors import CORS
+from band.db import mongo
 ##from flask_bcrypt import Bcrypt
 ##from flask_jwt_extended import JWTManager
 
 from bson import json_util, ObjectId
 from datetime import datetime, timedelta
 
-from Backend.band.api.bands import bands_api_v1
+from band.api.bands import bands_api_v1
 
 class MongoJsonEncoder(JSONEncoder):
     def default(self, obj):
@@ -27,13 +28,12 @@ def create_app():
     # TEMPLATE_FOLDER = os.path.join(APP_DIR, 'build')
 
     app = Flask(__name__)
+    app.config["MONGO_URI"] = "mongodb+srv://leahzhang1595995_db_user:TPnwKlk7EeHK24o8@cluster0.x0idehn.mongodb.net/virtualbands?retryWrites=true&w=majority&appName=Cluster0"
+    mongo.init_app(app)
+
     CORS(app)
     app.json_encoder = MongoJsonEncoder
+    from band.api.bands import bands_api_v1
     app.register_blueprint(bands_api_v1)
-
-    # @app.route('/', defaults={'path': ''})
-    # @app.route('/<path:path>')
-    # def serve(path):
-    #     return render_template('index.html')
-
+    
     return app

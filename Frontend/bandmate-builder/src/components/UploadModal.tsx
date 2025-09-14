@@ -3,8 +3,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Upload, File, X, Music, Mic, Video } from "lucide-react";
+import { Upload, File as FileIcon, X, Music, Mic, Video } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useNavigate } from "react-router-dom";
+import {uploadFileAndCreateBand, uploadFileToS3} from "@/lib/api";
 
 interface UploadModalProps {
   isOpen: boolean;
@@ -23,6 +25,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => 
   const [bandName, setBandName] = useState("");
   const [isDragOver, setIsDragOver] = useState(false);
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -100,36 +103,66 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => 
     setUploadedFiles(prev => prev.filter(f => f.id !== id));
   };
 
-  const handleCreateBand = () => {
-    if (!bandName.trim()) {
-      toast({
-        title: "Band name required",
-        description: "Please enter a name for your band.",
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    if (uploadedFiles.length === 0) {
-      toast({
-        title: "Recording required",
-        description: "Please upload at least one audio or video file.",
-        variant: "destructive"
-      });
-      return;
-    }
+  const handleCreateBand = async () => {
+  if (!bandName.trim()) {
+    toast({
+      title: "Band name required",
+      description: "Please enter a name for your band.",
+      variant: "destructive"
+    });
+    return;
+  }
+  
+  if (uploadedFiles.length === 0) {
+    toast({
+      title: "Recording required",
+      description: "Please upload at least one audio or video file.",
+      variant: "destructive"
+    });
+    return;
+  }
 
-    // Here you would typically process the files and create the band
+  try {
+    console.log('Starting upload process...', uploadedFiles, bandName);
+    
+    // Create FormData for upload
+    const formData = new FormData();
+    formData.append("file", uploadedFiles[0].file);
+    formData.append("bandName", bandName);
+    
+    console.log('FormData created, uploading to S3...');
+    
+    // Upload to S3 first
+    const uploadResult = await uploadFileToS3(formData);
+    console.log('Upload result:', uploadResult);
+    
+    // Create band with S3 URL
+    console.log('Creating band with S3 URL:', uploadResult.s3_url);
+    await uploadFileAndCreateBand(uploadResult.s3_url, bandName);
+    
+    // Show success toast
     toast({
       title: "Band created successfully!",
-      description: `${bandName} is being processed. You'll be notified when it's ready.`,
+      description: `${bandName} has been created and is ready to use.`,
     });
-    
+
     // Reset form
     setBandName("");
     setUploadedFiles([]);
     onClose();
-  };
+    
+    // Navigate to new-band page
+    navigate("/new-band");
+    
+  } catch (error) {
+    console.error('Error creating band:', error);
+    toast({
+      title: "Failed to create band",
+      description: error instanceof Error ? error.message : "Something went wrong. Please try again.",
+      variant: "destructive"
+    });
+  }
+};
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -188,7 +221,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => 
                 <div className="flex items-center justify-center space-x-4">
                   <Button variant="outline" asChild>
                     <label htmlFor="file-upload" className="cursor-pointer">
-                      <File className="h-4 w-4 mr-2" />
+                      <FileIcon className="h-4 w-4 mr-2" />
                       Choose Files
                     </label>
                   </Button>

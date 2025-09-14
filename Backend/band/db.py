@@ -15,28 +15,23 @@ from flask_pymongo import PyMongo
 from pymongo.errors import DuplicateKeyError, OperationFailure
 from bson.objectid import ObjectId
 from bson.errors import InvalidId
+import boto3
+import os 
 
+AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')
+AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
+S3_BUCKET_NAME = os.getenv('S3_BUCKET_NAME', 'virtualband')
+S3_REGION = os.getenv('S3_REGION', 'us-east-1')
+
+mongo = PyMongo() 
 
 def get_db():
+    return mongo.db
+
+
+def get_band_workspace_by_name(name):
     """
-    Configuration method to return db instance
-    """
-    db = getattr(g, "_database", None)
-
-    if db is None:
-
-        db = g._database = PyMongo(current_app).db
-       
-    return db
-
-
-# Use LocalProxy to read the global db instance with just `db`
-db = LocalProxy(get_db)
-
-
-def get_movies_by_country(countries):
-    """
-    Finds and returns movies by country.
+    Finds and returns band workspaces by name.
     Returns a list of dictionaries, each dictionary contains a title and an _id.
     """
     try:
@@ -54,178 +49,99 @@ def get_movies_by_country(countries):
         # Find movies matching the "countries" list, but only return the title
         # and _id. Do not include a limit in your own implementation, it is
         # included here to avoid sending 46000 documents down the wire.
-        print(f" c: {countries}")
-        return list(db.movies.find({},{"country" : 1}))
+        print(f" c: {name}")
+        return list(get_db().bands.find({},{"name" : 1}))
 
     except Exception as e:
         return e
 
-
-def get_movies_faceted(filters, page, movies_per_page):
+def get_bands():
     """
-    Returns movies and runtime and ratings facets. Also returns the total
-    movies matched by the filter.
-
-    Uses the same sort_key as get_movies
+    Returns a list of all bands
     """
-    sort_key = "tomatoes.viewer.numReviews"
+    return list(get_db().bands_collection.find({})), get_db().bands.count_documents({})
 
-    pipeline = []
-
-    if "cast" in filters:
-        pipeline.extend([{
-            "$match": {"cast": {"$in": filters.get("cast")}}
-        }, {
-            "$sort": {sort_key: -1}
-        }])
-    else:
-        raise AssertionError("No filters to pass to faceted search!")
-
-    counting = pipeline[:]
-    count_stage = {"$count": "count"}
-    counting.append(count_stage)
-
-    skip_stage = {"$skip": movies_per_page * page}
-    limit_stage = {"$limit": movies_per_page}
-    facet_stage = {
-        "$facet": {
-            "runtime": [{
-                "$bucket": {
-                    "groupBy": "$runtime",
-                    "boundaries": [0, 60, 90, 120, 180],
-                    "default": "other",
-                    "output": {
-                        "count": {"$sum": 1}
-                    }
-                }
-            }],
-            "rating": [{
-                "$bucket": {
-                    "groupBy": "$metacritic",
-                    "boundaries": [0, 50, 70, 90, 100],
-                    "default": "other",
-                    "output": {
-                        "count": {"$sum": 1}
-                    }
-                }
-            }],
-            "movies": [{
-                "$addFields": {
-                    "title": "$title"
-                }
-            }]
-        }
-    }
-
-    try:
-        movies = list(db.movies.aggregate(pipeline, allowDiskUse=True))[0]
-        count = list(db.movies.aggregate(counting, allowDiskUse=True))[
-            0].get("count")
-        return (movies, count)
-    except OperationFailure:
-        raise OperationFailure(
-            "Results too large to sort, be more restrictive in filter")
-
-
-def build_query_sort_project(filters):
+def get_band_workspace(id):
     """
-    Builds the `query` predicate, `sort` and `projection` attributes for a given
-    filters dictionary.
-    """
-    query = {}
-    # The field "tomatoes.viewer.numReviews" only exists in the movies we want
-    # to display on the front page of MFlix, because they are famous or
-    # aesthetically pleasing. When we sort on it, the movies containing this
-    # field will be displayed at the top of the page.
-    sort = [("tomatoes.viewer.numReviews", -1)]
-    project = None
-    if filters:
-        if "text" in filters:
-            query = {"$text": {"$search": filters["text"]}}
-            meta_score = {"$meta": "textScore"}
-            sort = [("score", meta_score)]
-            project = {"score": meta_score}
-        elif "cast" in filters:
-            query = {"cast": {"$in": filters["cast"]}}
-        elif "genres" in filters:
-
-            """
-            Ticket: Text and Subfield Search
-
-            Given a genre in the "filters" object, construct a query that
-            searches MongoDB for movies with that genre.
-            """
-
-            # TODO: Text and Subfield Search
-            # Construct a query that will search for the chosen genre.
-            query = {}
-
-    return query, sort, project
-
-
-def get_movies(filters, page, movies_per_page):
-    """
-    Returns a cursor to a list of movie documents.
-
-    Based on the page number and the number of movies per page, the result may
-    be skipped and limited.
-
-    The `filters` from the API are passed to the `build_query_sort_project`
-    method, which constructs a query, sort, and projection, and then that query
-    is executed by this method (`get_movies`).
-
-    Returns 2 elements in a tuple: (movies, total_num_movies)
-    """
-    query, sort, project = build_query_sort_project(filters)
-    if project:
-        cursor = db.movies.find(query, project).sort(sort)
-    else:
-        cursor = db.movies.find(query).sort(sort)
-
-    total_num_movies = 0
-    if page == 0:
-        total_num_movies = db.movies.count_documents(query)
- 
-    movies = cursor.limit(movies_per_page)
-
-    return (list(movies), total_num_movies)
-
-
-def get_movie(id):
-    """
-    Given a movie ID, return a movie with that ID, with the comments for that
-    movie embedded in the movie document. The comments are joined from the
-    comments collection using expressive $lookup.
+    Given a band workspace ID, return a band workspace with that ID.
     """
     try:
-
-        pipeline = [
-            {
-                "$match": {
-                    "_id": ObjectId(id)
-                }
-            }
-        ]
-
-        movie = db.movies.aggregate(pipeline).next()
-        return movie
-
-    # TODO: Error Handling
-    # If an invalid ID is passed to `get_movie`, it should return None.
-    except (StopIteration) as _:
-
+        band = get_db().bands_collection.find_one({"_id": ObjectId(id)})
+        return band
+    except (InvalidId,Exception):
         return None
 
+#Create 
+def add_band_workspace(name, date_created, date_modified, original_song, modified_song):
+    band_doc = {
+        "name": name, 
+        "date_created": date_created, 
+        "date_modified": date_modified, 
+        "original_song": original_song, 
+        "modified_song": modified_song
+    }
+    validate_band_workspace(band_doc)
+    return get_db().bands_collection.insert_one(band_doc)
+
+#Delete 
+def delete_band_workspace(band_id):
+    response = get_db().bands_collection.delete_one({"_id": ObjectId(band_id)})
+    return response.deleted_count
+
+#Update 
+def update_band_workspace(band_id, name, date_created, date_modified, original_song, modified_song):
+    response = get_db().bands_collection.update_one(
+        { "_id": ObjectId(band_id) },
+        { "$set": { "name ": name, "date_created" : date_created, "date_modified": date_modified, "original_song": original_song, "modified_song": modified_song 
+        } }
+    )
+    return response  
+
+def upload_file_to_s3(file_path, bucket_name, object_name, aws_access_key_id, aws_secret_access_key):
+    """Upload a file to S3 bucket and return the URL"""
+    try:
+        import boto3
+        from botocore.exceptions import ClientError, NoCredentialsError
+        
+        # Validate credentials
+        if not aws_access_key_id or not aws_secret_access_key:
+            print("AWS credentials not found in environment variables")
+            return None
+        
+        # Create S3 client
+        s3_client = boto3.client(
+            's3',
+            aws_access_key_id=aws_access_key_id,
+            aws_secret_access_key=aws_secret_access_key,
+            region_name=S3_REGION
+        )
+        
+        # Upload file
+        s3_client.upload_file(
+            file_path, 
+            bucket_name, 
+            object_name,
+        )
+        
+        # Generate URL
+        s3_url = f"https://{bucket_name}.s3.{S3_REGION}.amazonaws.com/{object_name}"
+        print(f"File uploaded successfully to: {s3_url}")
+        
+        return s3_url
+        
+    except NoCredentialsError:
+        print("AWS credentials not available")
+        return None
+    except ClientError as e:
+        print(f"S3 upload error: {e}")
+        return None
     except Exception as e:
-        return {}
-
-
-def get_all_genres():
-    """
-    Returns list of all genres in the database.
-    """
-    return list(db.movies.aggregate([
-        {"$unwind": "$genres"},
-        {"$group": {"_id": None, "genres": {"$addToSet": "$genres"}}}
-    ]))[0]["genres"]
-
+        print(f"Unexpected error during S3 upload: {e}")
+        return None
+    
+def validate_band_workspace(data):
+    required_fields = ["name", "date_created", "date_modified", "original_song", "modified_song"]
+    for field in required_fields:
+        if field not in data or not data[field]:
+            raise ValueError(f"Missing or empty required field: {field}")
+        

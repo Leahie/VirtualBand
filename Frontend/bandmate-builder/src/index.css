@@ -6,32 +6,33 @@
 
 @layer base {
   :root {
-    /* Dark music studio theme */
-    --background: 220 26% 6%;
-    --foreground: 210 40% 98%;
+  /* Suno-inspired dark theme */
+  --background: 24 100% 6%; /* deep warm dark */
+  --foreground: 36 100% 97%; /* soft light orange */
 
-    --card: 220 26% 8%;
-    --card-foreground: 210 40% 98%;
+  --card: 28 100% 10%; /* dark orange card */
+  --card-foreground: 36 100% 97%;
 
-    --popover: 220 26% 8%;
-    --popover-foreground: 210 40% 98%;
+  --popover: 330 100% 12%; /* magenta popover */
+  --popover-foreground: 36 100% 97%;
 
-    /* Music-inspired primary colors */
-    --primary: 280 85% 60%;
-    --primary-foreground: 210 40% 98%;
-    --primary-glow: 280 85% 70%;
+  /* Suno-inspired primary colors */
+  --primary: 24 100% 60%; /* orange */
+  --primary-foreground: 36 100% 97%;
+  --primary-glow: 330 100% 70%; /* magenta glow */
 
-    --secondary: 220 26% 12%;
-    --secondary-foreground: 210 40% 98%;
+  --secondary: 330 100% 60%; /* magenta/pink */
+  --secondary-foreground: 36 100% 97%;
 
-    --muted: 220 26% 10%;
-    --muted-foreground: 215 20.2% 65.1%;
+  --muted: 36 100% 85%; /* soft yellow/orange muted */
+  --muted-foreground: 24 100% 30%; /* muted orange text */
 
-    --accent: 45 93% 58%;
-    --accent-foreground: 220 26% 6%;
+  /* Suno-like accent colors: orange, yellow, red */
+  --accent: 32 100% 55%; /* orange */
+  --accent-foreground: 48 100% 50%; /* yellow */
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+  --destructive: 0 100% 50%; /* red */
+  --destructive-foreground: 48 100% 50%; /* yellow */
 
     --border: 220 26% 14%;
     --input: 220 26% 12%;
@@ -39,16 +40,16 @@
 
     --radius: 0.75rem;
 
-    /* Music-themed gradients */
-    --gradient-primary: linear-gradient(135deg, hsl(280 85% 60%), hsl(320 85% 65%));
-    --gradient-secondary: linear-gradient(135deg, hsl(45 93% 58%), hsl(25 93% 63%));
-    --gradient-hero: linear-gradient(135deg, hsl(280 85% 60%) 0%, hsl(320 85% 65%) 50%, hsl(45 93% 58%) 100%);
+  /* Suno-inspired gradients: orange base, magenta/pink left */
+  --gradient-primary: linear-gradient(135deg, #FF3EA5 0%, #FF66CC 20%, #F15A24 60%, #FF6A00 100%);
+  --gradient-secondary: linear-gradient(135deg, #FF3EA5 0%, #FF66CC 20%, #F15A24 60%, #FF6A00 100%);
+  --gradient-hero: linear-gradient(135deg, #FF3EA5 0%, #FF66CC 20%, #F15A24 60%, #FF6A00 100%);
     --gradient-subtle: linear-gradient(180deg, hsl(220 26% 8%), hsl(220 26% 6%));
 
     /* Shadows with music theme */
-    --shadow-glow: 0 0 50px hsl(280 85% 60% / 0.3);
-    --shadow-card: 0 8px 32px hsl(220 26% 4% / 0.5);
-    --shadow-primary: 0 10px 40px hsl(280 85% 60% / 0.2);
+    --shadow-glow: 0 0 50px #F15A24 / 0.3;
+    --shadow-card: 0 8px 32px #fb9b3b / 0.5;
+    --shadow-primary: 0 10px 40px #f19824 / 0.2;
 
     /* Animations */
     --transition-smooth: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);

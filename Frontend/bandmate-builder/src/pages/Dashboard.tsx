@@ -1,39 +1,75 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Music, Users, Calendar, MoreVertical, Upload } from "lucide-react";
+import { Plus, Music, Users, Calendar, MoreVertical, Upload, Loader2 } from "lucide-react";
 import { UploadModal } from "@/components/UploadModal";
+import { getBands, deleteBand } from "@/lib/api";
 
-// Mock data for existing bands
-const mockBands = [
-  {
-    id: 1,
-    name: "Midnight Symphony",
-    members: 4,
-    lastModified: "2 days ago",
-    genre: "Rock",
-    image: "/api/placeholder/300/200"
-  },
-  {
-    id: 2,
-    name: "Electric Dreams",
-    members: 3,
-    lastModified: "1 week ago", 
-    genre: "Electronic",
-    image: "/api/placeholder/300/200"
-  },
-  {
-    id: 3,
-    name: "Jazz Collective",
-    members: 5,
-    lastModified: "3 days ago",
-    genre: "Jazz", 
-    image: "/api/placeholder/300/200"
-  }
-];
+// Define the Band type for better type safety
+interface Band {
+  id: string;
+  name: string;
+  members: number;
+  genre: string;
+  lastModified: string;
+}
 
 const Dashboard = () => {
+  const [bands, setBands] = useState<Band[]>([]);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchBands = async () => {
+      try {
+        setIsLoading(true);
+        const response = await getBands();
+        console.log(response);
+        setBands(response.data.bands || []);
+      } catch (err) {
+        setError('Failed to fetch bands');
+        console.error('Error fetching bands:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchBands();
+  }, []);
+
+  const handleDeleteBand = async (id: string) => {
+    console.log(id)
+    try {
+      await deleteBand(id.$oid); // Calls your API
+      setBands(bands.filter(band => band._id !== id)); // Remove from state
+    } catch (err) {
+      setError('Failed to delete band');
+      console.error('Error deleting band:', err);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="flex items-center space-x-2">
+          <Loader2 className="h-6 w-6 animate-spin" />
+          <span>Loading your bands...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <p className="text-red-500">{error}</p>
+          <Button onClick={() => window.location.reload()}>Try Again</Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -48,7 +84,6 @@ const Dashboard = () => {
               </span>
             </div>
             <div className="flex items-center space-x-4">
-              <Button variant="outline">Profile</Button>
               <Button variant="hero" onClick={() => setIsUploadModalOpen(true)}>
                 <Plus className="h-4 w-4 mr-2" />
                 New Band
@@ -79,38 +114,13 @@ const Dashboard = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-foreground/60">Total Bands</p>
-                    <p className="text-3xl font-bold text-primary">{mockBands.length}</p>
+                    <p className="text-3xl font-bold text-primary">{bands.length}</p>
                   </div>
                   <Music className="h-8 w-8 text-primary" />
                 </div>
               </CardContent>
             </Card>
             
-            <Card className="bg-gradient-secondary/10 border-accent/20">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-foreground/60">AI Musicians</p>
-                    <p className="text-3xl font-bold text-accent">
-                      {mockBands.reduce((total, band) => total + band.members, 0)}
-                    </p>
-                  </div>
-                  <Users className="h-8 w-8 text-accent" />
-                </div>
-              </CardContent>
-            </Card>
-            
-            <Card className="bg-gradient-primary/10 border-primary-glow/20">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-foreground/60">This Week</p>
-                    <p className="text-3xl font-bold text-primary-glow">2</p>
-                  </div>
-                  <Calendar className="h-8 w-8 text-primary-glow" />
-                </div>
-              </CardContent>
-            </Card>
           </div>
 
           {/* Bands Grid */}
@@ -134,7 +144,7 @@ const Dashboard = () => {
                 onClick={() => setIsUploadModalOpen(true)}
               >
                 <CardContent className="p-8 text-center">
-                  <div className="space-y-4">
+                  <div className="space-y-4 pt-10">
                     <div className="w-16 h-16 bg-gradient-primary rounded-full flex items-center justify-center mx-auto group-hover:scale-110 transition-transform">
                       <Plus className="h-8 w-8 text-white" />
                     </div>
@@ -149,43 +159,40 @@ const Dashboard = () => {
               </Card>
 
               {/* Existing Band Cards */}
-              {mockBands.map((band) => (
-                <Card 
+              {bands.map((band) => (
+                <>
+                    <Card 
                   key={band.id}
                   className="hover:shadow-glow transition-all duration-300 cursor-pointer group bg-card/50 backdrop-blur-sm border-primary/20"
                 >
-                  <CardHeader className="pb-2">
-                    <div className="flex items-start justify-between">
-                      <div className="space-y-1">
-                        <CardTitle className="text-lg group-hover:text-primary transition-colors">
-                          {band.name}
-                        </CardTitle>
-                        <div className="flex items-center space-x-2 text-sm text-foreground/60">
-                          <Users className="h-3 w-3" />
-                          <span>{band.members} members</span>
-                          <span>•</span>
-                          <span>{band.genre}</span>
+                    <CardHeader className="pb-2">
+                      <div className="flex items-start justify-between">
+                        <div className="space-y-1">
+                          <CardTitle className="text-lg group-hover:text-primary transition-colors">
+                            {band.name}
+                          </CardTitle>
                         </div>
+                        <Button variant="ghost" size="sm">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
                       </div>
-                      <Button variant="ghost" size="sm">
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="w-full h-32 bg-gradient-subtle rounded-lg border border-primary/10 flex items-center justify-center">
-                      <Music className="h-8 w-8 text-foreground/40" />
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-foreground/60">
-                        Modified {band.lastModified}
-                      </span>
-                      <Button variant="ghost" size="sm">
-                        Open
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="w-full h-32 bg-gradient-subtle rounded-lg border border-primary/10 flex items-center justify-center">
+                        <Music className="h-8 w-8 text-foreground/40" />
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-foreground/60">
+                          Modified {band.lastModified}
+                        </span>
+                        <Button variant="ghost" size="sm" onClick={() => handleDeleteBand(band._id)}>
+                          Delete
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </>
+                
               ))}
             </div>
           </div>

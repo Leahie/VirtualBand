@@ -1,36 +1,19 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Plus, Music, Users, Calendar, MoreVertical, Upload } from "lucide-react";
 import { UploadModal } from "@/components/UploadModal";
+import {getBands} from "@/lib/api";
 
 // Mock data for existing bands
-const mockBands = [
-  {
-    id: 1,
-    name: "Midnight Symphony",
-    members: 4,
-    lastModified: "2 days ago",
-    genre: "Rock",
-    image: "/api/placeholder/300/200"
-  },
-  {
-    id: 2,
-    name: "Electric Dreams",
-    members: 3,
-    lastModified: "1 week ago", 
-    genre: "Electronic",
-    image: "/api/placeholder/300/200"
-  },
-  {
-    id: 3,
-    name: "Jazz Collective",
-    members: 5,
-    lastModified: "3 days ago",
-    genre: "Jazz", 
-    image: "/api/placeholder/300/200"
-  }
-];
+const [mockBands, setMockBands] = useState([]);
+
+useEffect(() => {
+  getBands().then((res) => {
+    setMockBands(res.data.bands);
+  });
+}, [])
+
 
 const Dashboard = () => {
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);

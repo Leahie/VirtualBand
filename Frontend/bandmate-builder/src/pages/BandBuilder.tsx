@@ -39,6 +39,7 @@ interface BandBuilderProps {
   sessionId: string;
   userInstrument: string;
   userMidiPath: string;
+  userAudioUrl?: string;
   onComplete: (finalMixPath: string) => void;
   onBack: () => void;
 }
@@ -47,6 +48,7 @@ const BandBuilder: React.FC<BandBuilderProps> = ({
   sessionId,
   userInstrument,
   userMidiPath,
+  userAudioUrl,
   onComplete,
   onBack,
 }) => {
@@ -58,6 +60,7 @@ const BandBuilder: React.FC<BandBuilderProps> = ({
     [key: string]: HTMLAudioElement | null;
   }>({});
   const [playingAudio, setPlayingAudio] = useState<string | null>(null);
+  const [userAudio, setUserAudio] = useState<HTMLAudioElement | null>(null);
   const [finalMixPath, setFinalMixPath] = useState<string | null>(null);
   const [finalMixAudio, setFinalMixAudio] = useState<HTMLAudioElement | null>(
     null
@@ -68,6 +71,29 @@ const BandBuilder: React.FC<BandBuilderProps> = ({
   useEffect(() => {
     generateBandMembers();
   }, []);
+
+  // Setup user audio if provided
+  useEffect(() => {
+    console.log("BandBuilder userAudioUrl:", userAudioUrl);
+    if (userAudioUrl) {
+      console.log("Setting up user audio with URL:", userAudioUrl);
+      const audio = new Audio(userAudioUrl);
+      audio.addEventListener("play", () => setPlayingAudio("user"));
+      audio.addEventListener("pause", () => setPlayingAudio(null));
+      audio.addEventListener("ended", () => setPlayingAudio(null));
+      audio.addEventListener("error", (e) => {
+        console.error("User audio error:", e);
+        toast({
+          title: "Audio Error",
+          description: "Could not load your uploaded audio.",
+          variant: "destructive",
+        });
+      });
+      setUserAudio(audio);
+    } else {
+      console.log("No userAudioUrl provided to BandBuilder");
+    }
+  }, [userAudioUrl]);
 
   // Cleanup audio on component unmount
   useEffect(() => {
@@ -82,8 +108,12 @@ const BandBuilder: React.FC<BandBuilderProps> = ({
         finalMixAudio.pause();
         finalMixAudio.currentTime = 0;
       }
+      if (userAudio) {
+        userAudio.pause();
+        userAudio.currentTime = 0;
+      }
     };
-  }, [audioRefs, finalMixAudio]);
+  }, [audioRefs, finalMixAudio, userAudio]);
 
   const generateBandMembers = async () => {
     setIsGeneratingBand(true);
@@ -231,14 +261,44 @@ const BandBuilder: React.FC<BandBuilderProps> = ({
   };
 
   const playAudio = (instrument: string) => {
-    const audio = audioRefs[instrument];
-    if (audio) {
+    if (instrument === "user" && userAudio) {
       // Stop any currently playing audio
-      if (playingAudio && playingAudio !== instrument) {
+      if (playingAudio && playingAudio !== "user") {
         const currentAudio = audioRefs[playingAudio];
         if (currentAudio) {
           currentAudio.pause();
           currentAudio.currentTime = 0;
+        }
+      }
+
+      if (userAudio.paused) {
+        userAudio.play().catch((error) => {
+          console.error("Error playing user audio:", error);
+          toast({
+            title: "Playback Error",
+            description: "Could not play your uploaded audio. Please try again.",
+            variant: "destructive",
+          });
+        });
+      } else {
+        userAudio.pause();
+      }
+      return;
+    }
+
+    const audio = audioRefs[instrument];
+    if (audio) {
+      // Stop any currently playing audio
+      if (playingAudio && playingAudio !== instrument) {
+        if (playingAudio === "user" && userAudio) {
+          userAudio.pause();
+          userAudio.currentTime = 0;
+        } else {
+          const currentAudio = audioRefs[playingAudio];
+          if (currentAudio) {
+            currentAudio.pause();
+            currentAudio.currentTime = 0;
+          }
         }
       }
 
@@ -267,6 +327,10 @@ const BandBuilder: React.FC<BandBuilderProps> = ({
     if (finalMixAudio) {
       finalMixAudio.pause();
       finalMixAudio.currentTime = 0;
+    }
+    if (userAudio) {
+      userAudio.pause();
+      userAudio.currentTime = 0;
     }
     setPlayingAudio(null);
   };
@@ -344,6 +408,7 @@ const BandBuilder: React.FC<BandBuilderProps> = ({
         body: JSON.stringify({
           session_id: sessionId,
           wav_files: wavFiles,
+          user_audio_url: userAudioUrl,
         }),
       });
 
@@ -512,6 +577,125 @@ const BandBuilder: React.FC<BandBuilderProps> = ({
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* User's uploaded audio - Always show for debugging */}
+              <Card className="space-y-4 border-primary/20">
+                <CardHeader>
+                  <CardTitle className="flex items-center justify-between">
+                    <span className="capitalize">Your {userInstrument}</span>
+                    <div className="flex items-center space-x-2">
+                      {userAudioUrl ? (
+                        <CheckCircle className="h-4 w-4 text-green-500" />
+                      ) : (
+                        <div className="text-sm text-red-500">No audio URL</div>
+                      )}
+                    </div>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Your uploaded audio</Label>
+                    <div className="p-3 bg-muted rounded-md text-sm">
+                      {userAudioUrl ? (
+                        <>This is your original {userInstrument} recording that will be included in the final mix.</>
+                      ) : (
+                        <div className="text-red-500">
+                          Audio URL not provided: {JSON.stringify(userAudioUrl)}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => playAudio("user")}
+                      className="flex-1"
+                      disabled={!userAudioUrl}
+                    >
+                      {playingAudio === "user" ? (
+                        <>
+                          <Pause className="h-4 w-4 mr-2" />
+                          Pause Your Audio
+                        </>
+                      ) : (
+                        <>
+                          <Play className="h-4 w-4 mr-2" />
+                          {userAudioUrl ? "Play Your Audio" : "No Audio Available"}
+                        </>
+                      )}
+                    </Button>
+                  </div>
+
+                  <div className="text-sm text-green-600 flex items-center justify-between">
+                    <div className="flex items-center">
+                      <CheckCircle className="h-4 w-4 mr-2" />
+                      {userAudioUrl ? "Ready for mixing" : "Audio not loaded"}
+                    </div>
+                    {playingAudio === "user" && (
+                      <div className="flex items-center text-primary">
+                        <div className="w-2 h-2 bg-primary rounded-full animate-pulse mr-2"></div>
+                        Playing...
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* User's uploaded audio - Original conditional version */}
+              {userAudioUrl && false && (
+                <Card className="space-y-4 border-primary/20">
+                  <CardHeader>
+                    <CardTitle className="flex items-center justify-between">
+                      <span className="capitalize">Your {userInstrument}</span>
+                      <div className="flex items-center space-x-2">
+                        <CheckCircle className="h-4 w-4 text-green-500" />
+                      </div>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                      <Label>Your uploaded audio</Label>
+                      <div className="p-3 bg-muted rounded-md text-sm">
+                        This is your original {userInstrument} recording that will be included in the final mix.
+                      </div>
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                      <Button
+                        variant="outline"
+                        onClick={() => playAudio("user")}
+                        className="flex-1"
+                      >
+                        {playingAudio === "user" ? (
+                          <>
+                            <Pause className="h-4 w-4 mr-2" />
+                            Pause Your Audio
+                          </>
+                        ) : (
+                          <>
+                            <Play className="h-4 w-4 mr-2" />
+                            Play Your Audio
+                          </>
+                        )}
+                      </Button>
+                    </div>
+
+                    <div className="text-sm text-green-600 flex items-center justify-between">
+                      <div className="flex items-center">
+                        <CheckCircle className="h-4 w-4 mr-2" />
+                        Ready for mixing
+                      </div>
+                      {playingAudio === "user" && (
+                        <div className="flex items-center text-primary">
+                          <div className="w-2 h-2 bg-primary rounded-full animate-pulse mr-2"></div>
+                          Playing...
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
               {bandMembers.map((member, index) => (
                 <Card key={index} className="space-y-4">
                   <CardHeader>

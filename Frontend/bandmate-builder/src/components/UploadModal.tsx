@@ -16,10 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Upload, File, X, Music, Mic, Video, Loader2 } from "lucide-react";
-import { Upload, File as FileIcon, X, Music, Mic, Video } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useNavigate } from "react-router-dom";
-import {uploadFileAndCreateBand, uploadFileToS3} from "@/lib/api";
 
 interface UploadModalProps {
   isOpen: boolean;
@@ -27,7 +24,8 @@ interface UploadModalProps {
   onUploadComplete: (
     sessionId: string,
     userInstrument: string,
-    userMidiPath: string
+    userMidiPath: string,
+    userAudioUrl?: string
   ) => void;
 }
 
@@ -49,7 +47,6 @@ export const UploadModal: React.FC<UploadModalProps> = ({
   const [isDragOver, setIsDragOver] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const { toast } = useToast();
-  const navigate = useNavigate();
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -164,47 +161,65 @@ export const UploadModal: React.FC<UploadModalProps> = ({
       return;
     }
 
-  try {
-    console.log('Starting upload process...', uploadedFiles, bandName);
-    
-    // Create FormData for upload
-    const formData = new FormData();
-    formData.append("file", uploadedFiles[0].file);
-    formData.append("bandName", bandName);
-    
-    console.log('FormData created, uploading to S3...');
-    
-    // Upload to S3 first
-    const uploadResult = await uploadFileToS3(formData);
-    console.log('Upload result:', uploadResult);
-    
-    // Create band with S3 URL
-    console.log('Creating band with S3 URL:', uploadResult.s3_url);
-    await uploadFileAndCreateBand(uploadResult.s3_url, bandName);
-    
-    // Show success toast
-    toast({
-      title: "Band created successfully!",
-      description: `${bandName} has been created and is ready to use.`,
-    });
+    setIsUploading(true);
 
-    // Reset form
-    setBandName("");
-    setUploadedFiles([]);
-    onClose();
-    
-    // Navigate to new-band page
-    navigate("/new-band");
-    
-  } catch (error) {
-    console.error('Error creating band:', error);
-    toast({
-      title: "Failed to create band",
-      description: error instanceof Error ? error.message : "Something went wrong. Please try again.",
-      variant: "destructive"
-    });
-  }
-};
+    try {
+      console.log("Starting upload process...");
+      console.log("File:", uploadedFiles[0].file);
+      console.log("Instrument:", userInstrument);
+
+      const formData = new FormData();
+      formData.append("file", uploadedFiles[0].file);
+      formData.append("instrument", userInstrument);
+
+      console.log("FormData created, sending request...");
+
+      const response = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      console.log("Response status:", response.status);
+      console.log("Response headers:", response.headers);
+
+      const data = await response.json();
+      console.log("Response data:", data);
+
+      if (data.success) {
+        toast({
+          title: "Upload successful!",
+          description:
+            "Your file has been processed. Starting band creation...",
+        });
+
+        // Call the callback with the session data
+        onUploadComplete(
+          data.session_id,
+          data.instrument,
+          data.file_path,
+          data.user_audio_url
+        );
+
+        // Reset form
+        setBandName("");
+        setUserInstrument("");
+        setUploadedFiles([]);
+        onClose();
+      } else {
+        console.error("Upload failed:", data.error);
+        throw new Error(data.error || "Upload failed");
+      }
+    } catch (error) {
+      console.error("Upload error:", error);
+      toast({
+        title: "Upload failed",
+        description: `Failed to upload your file: ${error.message}. Please try again.`,
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -287,7 +302,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                 <div className="flex items-center justify-center space-x-4">
                   <Button variant="outline" asChild>
                     <label htmlFor="file-upload" className="cursor-pointer">
-                      <FileIcon className="h-4 w-4 mr-2" />
+                      <File className="h-4 w-4 mr-2" />
                       Choose Files
                     </label>
                   </Button>

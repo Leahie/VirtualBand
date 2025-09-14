@@ -1,5 +1,6 @@
 from pydub import AudioSegment
 from cerebras.cloud.sdk import Cerebras
+import os
 
 # instrument name (string) to its allocating number
 def instrument_name_to_number(instrument_name):
@@ -37,16 +38,59 @@ def instrument_name_to_number(instrument_name):
 
 # given array of multiple .wav file paths, combines it into one overall .wav file
 def combine_wav_files(list_of_wav_file_paths, overall_mix_save_path):
-  mixed = AudioSegment.from_wav(list_of_wav_file_paths[0])
+  print(f"Starting audio combination with {len(list_of_wav_file_paths)} files:")
+  for i, path in enumerate(list_of_wav_file_paths):
+    print(f"  File {i+1}: {path} (exists: {os.path.exists(path)})")
+  
+  if not list_of_wav_file_paths:
+    raise ValueError("No audio files provided for combining")
+  
+  # Check if all files exist
+  missing_files = [f for f in list_of_wav_file_paths if not os.path.exists(f)]
+  if missing_files:
+    raise FileNotFoundError(f"Missing audio files: {missing_files}")
+  
+  try:
+    # Load first file and handle different formats
+    first_file = list_of_wav_file_paths[0]
+    print(f"Loading first file: {first_file}")
+    
+    if first_file.lower().endswith('.mp3'):
+      mixed = AudioSegment.from_mp3(first_file)
+    else:
+      mixed = AudioSegment.from_wav(first_file)
+    
+    print(f"First file loaded successfully. Duration: {len(mixed)}ms")
 
-  # overlay all the wav file songs
-  for f in list_of_wav_file_paths[1:]:
-      track = AudioSegment.from_wav(f)
-      mixed = mixed.overlay(track)
+    # overlay all the other audio files
+    for i, f in enumerate(list_of_wav_file_paths[1:], 2):
+      print(f"Loading file {i}: {f}")
+      try:
+        if f.lower().endswith('.mp3'):
+          track = AudioSegment.from_mp3(f)
+        else:
+          track = AudioSegment.from_wav(f)
+        
+        print(f"File {i} loaded. Duration: {len(track)}ms")
+        mixed = mixed.overlay(track)
+        print(f"File {i} overlayed successfully")
+      except Exception as e:
+        print(f"Error loading file {f}: {e}")
+        continue
 
-  # export the final mix
-  mixed.export(overall_mix_save_path, format="wav")
-  print(f"Congrats on your AI Band! Saved the piece at {overall_mix_save_path}")
+    # Normalize volume to prevent clipping
+    mixed = mixed.normalize()
+    
+    # export the final mix
+    print(f"Exporting final mix to: {overall_mix_save_path}")
+    mixed.export(overall_mix_save_path, format="wav")
+    print(f"Congrats on your AI Band! Saved the piece at {overall_mix_save_path}")
+    
+  except Exception as e:
+    print(f"Error in combine_wav_files: {e}")
+    import traceback
+    traceback.print_exc()
+    raise
 
 
 # get a list of 4 relevant instruments for the band

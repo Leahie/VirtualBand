@@ -49,22 +49,16 @@ const Dashboard = () => {
     sessionId: string;
     userInstrument: string;
     userMidiPath: string;
-    userAudioUrl?: string;
+    userWavUrl?: string;
   } | null>(null);
 
   const handleUploadComplete = (
     sessionId: string,
     userInstrument: string,
     userMidiPath: string,
-    userAudioUrl?: string
+    userWavUrl?: string
   ) => {
-    console.log("Dashboard handleUploadComplete called with:", {
-      sessionId,
-      userInstrument,
-      userMidiPath,
-      userAudioUrl,
-    });
-    setBandData({ sessionId, userInstrument, userMidiPath, userAudioUrl });
+    setBandData({ sessionId, userInstrument, userMidiPath, userWavUrl });
     setCurrentView("band-builder");
   };
 
@@ -86,7 +80,7 @@ const Dashboard = () => {
         sessionId={bandData.sessionId}
         userInstrument={bandData.userInstrument}
         userMidiPath={bandData.userMidiPath}
-        userAudioUrl={bandData.userAudioUrl}
+        userWavUrl={bandData.userWavUrl}
         onComplete={handleBandComplete}
         onBack={handleBackToDashboard}
       />

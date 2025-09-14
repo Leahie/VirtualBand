@@ -55,36 +55,81 @@ def combine_wav_files(list_of_wav_file_paths, overall_mix_save_path):
     first_file = list_of_wav_file_paths[0]
     print(f"Loading first file: {first_file}")
     
-    if first_file.lower().endswith('.mp3'):
-      mixed = AudioSegment.from_mp3(first_file)
-    else:
-      mixed = AudioSegment.from_wav(first_file)
+    try:
+      if first_file.lower().endswith('.mp3'):
+        mixed = AudioSegment.from_mp3(first_file)
+      elif first_file.lower().endswith('.wav'):
+        mixed = AudioSegment.from_wav(first_file)
+      else:
+        # Try to load as audio file with pydub's generic loader
+        mixed = AudioSegment.from_file(first_file)
+    except Exception as format_error:
+      print(f"Error loading with format-specific loader: {format_error}")
+      print("Trying generic file loader...")
+      try:
+        mixed = AudioSegment.from_file(first_file)
+      except Exception as generic_error:
+        print(f"Generic loader also failed: {generic_error}")
+        raise Exception(f"Could not load audio file {first_file}. This may be due to missing ffmpeg. Please ensure the file is a valid audio format.")
     
-    print(f"First file loaded successfully. Duration: {len(mixed)}ms")
+    print(f"First file loaded successfully. Duration: {len(mixed)}ms, Channels: {mixed.channels}, Sample rate: {mixed.frame_rate}")
+
+    # If there's only one file, just export it directly
+    if len(list_of_wav_file_paths) == 1:
+      print("Only one file provided, exporting directly...")
+      mixed = mixed.normalize()
+      mixed.export(overall_mix_save_path, format="wav")
+      print(f"Single file exported to: {overall_mix_save_path}")
+      return
 
     # overlay all the other audio files
     for i, f in enumerate(list_of_wav_file_paths[1:], 2):
       print(f"Loading file {i}: {f}")
       try:
         if f.lower().endswith('.mp3'):
-          track = AudioSegment.from_mp3(f)
-        else:
+          try:
+            track = AudioSegment.from_mp3(f)
+          except Exception as mp3_error:
+            print(f"MP3 loader failed for {f}: {mp3_error}")
+            track = AudioSegment.from_file(f)
+        elif f.lower().endswith('.wav'):
           track = AudioSegment.from_wav(f)
+        else:
+          # Try to load as audio file with pydub's generic loader
+          track = AudioSegment.from_file(f)
         
-        print(f"File {i} loaded. Duration: {len(track)}ms")
+        print(f"File {i} loaded. Duration: {len(track)}ms, Channels: {track.channels}, Sample rate: {track.frame_rate}")
+        
+        # Ensure both tracks have the same sample rate and channels
+        if track.frame_rate != mixed.frame_rate:
+          print(f"Converting sample rate from {track.frame_rate} to {mixed.frame_rate}")
+          track = track.set_frame_rate(mixed.frame_rate)
+        
+        if track.channels != mixed.channels:
+          print(f"Converting channels from {track.channels} to {mixed.channels}")
+          if mixed.channels == 1:
+            track = track.set_channels(1)
+          else:
+            track = track.set_channels(2)
+        
+        # Overlay the track
         mixed = mixed.overlay(track)
-        print(f"File {i} overlayed successfully")
+        print(f"File {i} overlayed successfully. New duration: {len(mixed)}ms")
       except Exception as e:
         print(f"Error loading file {f}: {e}")
+        import traceback
+        traceback.print_exc()
         continue
 
     # Normalize volume to prevent clipping
+    print("Normalizing final mix...")
     mixed = mixed.normalize()
     
     # export the final mix
     print(f"Exporting final mix to: {overall_mix_save_path}")
     mixed.export(overall_mix_save_path, format="wav")
     print(f"Congrats on your AI Band! Saved the piece at {overall_mix_save_path}")
+    print(f"Final mix stats - Duration: {len(mixed)}ms, Channels: {mixed.channels}, Sample rate: {mixed.frame_rate}")
     
   except Exception as e:
     print(f"Error in combine_wav_files: {e}")

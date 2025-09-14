@@ -25,7 +25,7 @@ interface UploadModalProps {
     sessionId: string,
     userInstrument: string,
     userMidiPath: string,
-    userAudioUrl?: string
+    userWavUrl?: string
   ) => void;
 }
 
@@ -64,16 +64,19 @@ export const UploadModal: React.FC<UploadModalProps> = ({
 
       Array.from(files).forEach((file) => {
         const isAudio = file.type.startsWith("audio/");
-        const isVideo = file.type.startsWith("video/");
+        const isMidi =
+          file.name.toLowerCase().endsWith(".mid") ||
+          file.name.toLowerCase().endsWith(".midi");
 
-        if (isAudio || isVideo) {
+        if (isAudio || isMidi) {
           const uploadedFile: UploadedFile = {
             id: Math.random().toString(36).substr(2, 9),
             file,
-            type: isAudio ? "audio" : "video",
+            type: isAudio ? "audio" : "audio", // Treat MIDI as audio
           };
 
-          if (isVideo) {
+          if (false) {
+            // Remove video processing
             // Create video thumbnail
             const video = document.createElement("video");
             video.src = URL.createObjectURL(file);
@@ -95,7 +98,8 @@ export const UploadModal: React.FC<UploadModalProps> = ({
         } else {
           toast({
             title: "Unsupported file type",
-            description: "Please upload audio or video files only.",
+            description:
+              "Please upload audio files (MP3, WAV) or MIDI files only.",
             variant: "destructive",
           });
         }
@@ -155,7 +159,8 @@ export const UploadModal: React.FC<UploadModalProps> = ({
     if (uploadedFiles.length === 0) {
       toast({
         title: "Recording required",
-        description: "Please upload at least one audio or video file.",
+        description:
+          "Please upload at least one audio file (MP3, WAV) or MIDI file.",
         variant: "destructive",
       });
       return;
@@ -164,32 +169,30 @@ export const UploadModal: React.FC<UploadModalProps> = ({
     setIsUploading(true);
 
     try {
-      console.log("Starting upload process...");
-      console.log("File:", uploadedFiles[0].file);
-      console.log("Instrument:", userInstrument);
-
       const formData = new FormData();
       formData.append("file", uploadedFiles[0].file);
       formData.append("instrument", userInstrument);
-
-      console.log("FormData created, sending request...");
 
       const response = await fetch("/api/upload", {
         method: "POST",
         body: formData,
       });
 
-      console.log("Response status:", response.status);
-      console.log("Response headers:", response.headers);
-
       const data = await response.json();
-      console.log("Response data:", data);
 
       if (data.success) {
+        const fileExtension = uploadedFiles[0].file.name
+          .split(".")
+          .pop()
+          ?.toLowerCase();
+        const isAudioFile =
+          fileExtension && ["mp3", "wav"].includes(fileExtension);
+
         toast({
           title: "Upload successful!",
-          description:
-            "Your file has been processed. Starting band creation...",
+          description: isAudioFile
+            ? "Your audio file has been converted to MIDI. Starting band creation..."
+            : "Your MIDI file has been processed. Starting band creation...",
         });
 
         // Call the callback with the session data
@@ -197,7 +200,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
           data.session_id,
           data.instrument,
           data.file_path,
-          data.user_audio_url
+          data.user_wav_url
         );
 
         // Reset form
@@ -206,14 +209,12 @@ export const UploadModal: React.FC<UploadModalProps> = ({
         setUploadedFiles([]);
         onClose();
       } else {
-        console.error("Upload failed:", data.error);
         throw new Error(data.error || "Upload failed");
       }
     } catch (error) {
-      console.error("Upload error:", error);
       toast({
         title: "Upload failed",
-        description: `Failed to upload your file: ${error.message}. Please try again.`,
+        description: "Failed to upload your file. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -295,7 +296,8 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                     Drag and drop your files here
                   </p>
                   <p className="text-sm text-foreground/60">
-                    Supports MP3, WAV, MP4, MOV, and other audio/video formats
+                    Supports MP3, WAV, MIDI files. MP3/WAV will be converted to
+                    MIDI automatically.
                   </p>
                 </div>
 
@@ -312,7 +314,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                   id="file-upload"
                   type="file"
                   multiple
-                  accept="audio/*,video/*"
+                  accept="audio/*,.mid,.midi"
                   onChange={handleFileInput}
                   className="hidden"
                 />

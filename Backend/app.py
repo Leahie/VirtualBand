@@ -6,6 +6,7 @@ import tempfile
 from werkzeug.utils import secure_filename
 from ai_generated_music import ai_artist
 from extra_functions import get_4_instruments, combine_wav_files
+from mp3_to_midi import simple_mp3_to_midi
 import uuid
 
 app = Flask(__name__)
@@ -15,6 +16,7 @@ CORS(app)
 UPLOAD_FOLDER = 'uploads'
 BAND_FOLDER = 'band'
 PUBLIC_AUDIO_FOLDER = '../Frontend/bandmate-builder/public/audio'
+INTERMEDIATE_FOLDER = '../Frontend/bandmate-builder/public/intermediate'
 ALLOWED_EXTENSIONS = {'mid', 'midi', 'wav', 'mp3'}
 
 # Create directories if they don't exist
@@ -22,98 +24,92 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(BAND_FOLDER, exist_ok=True)
 os.makedirs(os.path.join(BAND_FOLDER, 'individual_ai_artists'), exist_ok=True)
 os.makedirs(PUBLIC_AUDIO_FOLDER, exist_ok=True)
+os.makedirs(INTERMEDIATE_FOLDER, exist_ok=True)
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def clear_intermediate_folder():
+    """Clear all files in the intermediate folder"""
+    import shutil
+    if os.path.exists(INTERMEDIATE_FOLDER):
+        shutil.rmtree(INTERMEDIATE_FOLDER)
+        os.makedirs(INTERMEDIATE_FOLDER, exist_ok=True)
 
 @app.route('/api/upload', methods=['POST'])
 def upload_file():
     """Upload user's MIDI file and get instrument type"""
     try:
-        print(f"Upload request received. Files: {list(request.files.keys())}")
-        print(f"Form data: {dict(request.form)}")
-        
         if 'file' not in request.files:
-            print("Error: No file in request")
             return jsonify({'error': 'No file provided'}), 400
         
         file = request.files['file']
         instrument = request.form.get('instrument', 'piano')
         
-        print(f"File: {file.filename}, Instrument: {instrument}")
-        
         if file.filename == '':
-            print("Error: Empty filename")
             return jsonify({'error': 'No file selected'}), 400
         
         if not allowed_file(file.filename):
-            print(f"Error: Invalid file type: {file.filename}")
             return jsonify({'error': 'Invalid file type. Please upload MIDI, WAV, or MP3 files.'}), 400
         
         # Generate unique session ID
         session_id = str(uuid.uuid4())
-        print(f"Generated session ID: {session_id}")
         
         # Save uploaded file
         filename = secure_filename(file.filename)
         file_path = os.path.join(UPLOAD_FOLDER, f"{session_id}_{filename}")
-        print(f"Saving file to: {file_path}")
         file.save(file_path)
         
-        user_audio_url = None
+        # Check file type and convert if needed
+        file_extension = filename.rsplit('.', 1)[1].lower()
         
-        # Handle audio files for playback
-        if filename.lower().endswith(('.mp3', '.wav')):
-            print(f"Processing audio file: {filename}")
+        if file_extension in ['mp3', 'wav']:
+            # Convert audio to MIDI
+            print(f"Converting {file_extension} to MIDI...")
+            midi_filename = f"{session_id}_converted.mid"
+            user_midi_path = os.path.join(UPLOAD_FOLDER, midi_filename)
             
-            # Convert to WAV if it's MP3 for consistent playback
-            if filename.lower().endswith('.mp3'):
-                try:
-                    from pydub import AudioSegment
-                    print("Converting MP3 to WAV...")
-                    audio = AudioSegment.from_mp3(file_path)
-                    wav_filename = f"{session_id}_user_audio.wav"
-                    wav_path = os.path.join(PUBLIC_AUDIO_FOLDER, wav_filename)
-                    audio.export(wav_path, format="wav")
-                    user_audio_url = f"/audio/{wav_filename}"
-                    print(f"MP3 converted to WAV: {wav_path}")
-                except Exception as e:
-                    print(f"Error converting MP3: {e}")
-                    # Fallback: just copy the file
-                    public_filename = f"{session_id}_user_audio.mp3"
-                    public_file_path = os.path.join(PUBLIC_AUDIO_FOLDER, public_filename)
-                    import shutil
-                    shutil.copy2(file_path, public_file_path)
-                    user_audio_url = f"/audio/{public_filename}"
-                    
-            elif filename.lower().endswith('.wav'):
-                print("Copying WAV file...")
-                public_filename = f"{session_id}_user_audio.wav"
-                public_file_path = os.path.join(PUBLIC_AUDIO_FOLDER, public_filename)
-                import shutil
-                shutil.copy2(file_path, public_file_path)
-                user_audio_url = f"/audio/{public_filename}"
-                print(f"WAV copied: {public_file_path}")
+            try:
+                simple_mp3_to_midi(file_path, user_midi_path)
+                print(f"Successfully converted to MIDI: {user_midi_path}")
+            except Exception as e:
+                print(f"Error converting audio to MIDI: {e}")
+                return jsonify({'error': f'Failed to convert audio to MIDI: {str(e)}'}), 500
+            
+            # Also convert to WAV and save to public folder for playback
+            print(f"Converting {file_extension} to WAV for playback...")
+            user_wav_filename = f"{session_id}_user_{instrument}.wav"
+            user_wav_path = os.path.join(PUBLIC_AUDIO_FOLDER, user_wav_filename)
+            
+            try:
+                import librosa
+                import soundfile as sf
+                
+                # Load audio and convert to WAV
+                y, sr = librosa.load(file_path, sr=22050)
+                sf.write(user_wav_path, y, sr)
+                print(f"Successfully converted to WAV: {user_wav_path}")
+                
+                # Store the WAV path for later use
+                user_wav_url = f"/audio/{user_wav_filename}"
+                
+            except Exception as e:
+                print(f"Error converting to WAV: {e}")
+                user_wav_url = None
+        else:
+            # Assume it's already a MIDI file
+            user_midi_path = file_path
+            user_wav_url = None
         
-        # For now, we'll assume it's already a MIDI file
-        # In a real implementation, you'd convert audio to MIDI here
-        user_midi_path = file_path
-        
-        response_data = {
+        return jsonify({
             'success': True,
             'session_id': session_id,
             'file_path': user_midi_path,
             'instrument': instrument,
-            'user_audio_url': user_audio_url
-        }
-        
-        print(f"Upload successful. Response: {response_data}")
-        return jsonify(response_data)
+            'user_wav_url': user_wav_url
+        })
     
     except Exception as e:
-        print(f"Upload error: {str(e)}")
-        import traceback
-        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/generate-band', methods=['POST'])
@@ -122,6 +118,9 @@ def generate_band():
     try:
         data = request.get_json()
         user_instrument = data.get('instrument', 'piano')
+        
+        # Clear intermediate folder for new band
+        clear_intermediate_folder()
         
         # Get 4 complementary instruments
         band_instruments = get_4_instruments(user_instrument)
@@ -151,18 +150,19 @@ def generate_ai_music():
         # In a real implementation, you'd analyze the MIDI file
         user_midi_content = f"User's {ai_instrument} music"
         
-        # Generate AI music
+        # Generate AI music with simple naming in intermediate folder
         output_wav = ai_artist(
             prompt_for_ai_artist=prompt,
             ai_artist_instrument=ai_instrument,
             users_midi=user_midi_content,
             users_instrument="user_instrument",
-            session_id=session_id
+            session_id=session_id,
+            use_intermediate_folder=True
         )
         
         # Return the public URL for the audio file
         audio_filename = os.path.basename(output_wav)
-        public_audio_url = f"/audio/{audio_filename}"
+        public_audio_url = f"/intermediate/{audio_filename}"
         
         return jsonify({
             'success': True,
@@ -180,86 +180,49 @@ def combine_music():
         data = request.get_json()
         session_id = data.get('session_id')
         wav_files = data.get('wav_files', [])
-        user_audio_url = data.get('user_audio_url')
         
-        print(f"=== COMBINE MUSIC REQUEST ===")
-        print(f"Session ID: {session_id}")
         print(f"Received wav_files: {wav_files}")
-        print(f"User audio URL: {user_audio_url}")
         
-        if not wav_files and not user_audio_url:
-            return jsonify({'error': 'No audio files provided for combining'}), 400
+        if not wav_files:
+            return jsonify({'error': 'No WAV files provided'}), 400
         
         # Convert public URLs to actual file paths
         actual_file_paths = []
-        
-        # Process AI-generated files
         for wav_file in wav_files:
-            if wav_file.startswith('/audio/'):
+            if wav_file.startswith('/intermediate/'):
+                # Convert /intermediate/filename.wav to actual file path
+                filename = wav_file.replace('/intermediate/', '')
+                actual_path = os.path.join(INTERMEDIATE_FOLDER, filename)
+                actual_file_paths.append(actual_path)
+                print(f"Converted {wav_file} to {actual_path}")
+            elif wav_file.startswith('/audio/'):
                 # Convert /audio/filename.wav to actual file path
                 filename = wav_file.replace('/audio/', '')
                 actual_path = os.path.join(PUBLIC_AUDIO_FOLDER, filename)
-                if os.path.exists(actual_path):
-                    actual_file_paths.append(actual_path)
-                    print(f"✓ Added AI file: {actual_path}")
-                else:
-                    print(f"✗ AI file not found: {actual_path}")
+                actual_file_paths.append(actual_path)
+                print(f"Converted {wav_file} to {actual_path}")
             else:
                 # Assume it's already a file path
-                if os.path.exists(wav_file):
-                    actual_file_paths.append(wav_file)
-                    print(f"✓ Added direct path: {wav_file}")
-                else:
-                    print(f"✗ Direct path not found: {wav_file}")
+                actual_file_paths.append(wav_file)
         
-        # Add user's audio file if provided
-        if user_audio_url and user_audio_url.startswith('/audio/'):
-            user_filename = user_audio_url.replace('/audio/', '')
-            user_actual_path = os.path.join(PUBLIC_AUDIO_FOLDER, user_filename)
-            if os.path.exists(user_actual_path):
-                actual_file_paths.append(user_actual_path)
-                print(f"✓ Added user audio: {user_actual_path}")
-            else:
-                print(f"✗ User audio file not found: {user_actual_path}")
-                # List files in the directory for debugging
-                try:
-                    files_in_dir = os.listdir(PUBLIC_AUDIO_FOLDER)
-                    print(f"Files in {PUBLIC_AUDIO_FOLDER}: {files_in_dir}")
-                except Exception as e:
-                    print(f"Error listing directory: {e}")
-        
-        if not actual_file_paths:
-            return jsonify({'error': 'No valid audio files found for combining'}), 400
-        
-        print(f"Final file list for mixing ({len(actual_file_paths)} files): {actual_file_paths}")
+        print(f"Actual file paths: {actual_file_paths}")
         
         # Create combined output path in public folder
         output_path = os.path.join(PUBLIC_AUDIO_FOLDER, f"{session_id}_final_mix.wav")
-        print(f"Output path: {output_path}")
         
-        # Combine all audio files
+        # Combine all WAV files
         combine_wav_files(actual_file_paths, output_path)
-        
-        # Verify the output file was created
-        if os.path.exists(output_path):
-            file_size = os.path.getsize(output_path)
-            print(f"✓ Final mix created successfully: {output_path} ({file_size} bytes)")
-        else:
-            raise Exception("Final mix file was not created")
         
         # Return the public URL for the final mix
         final_mix_url = f"/audio/{session_id}_final_mix.wav"
         
         return jsonify({
             'success': True,
-            'final_mix_path': final_mix_url,
-            'files_combined': len(actual_file_paths)
+            'final_mix_path': final_mix_url
         })
     
     except Exception as e:
         print(f"Error in combine_music: {e}")
-        import traceback
-        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/audio/<path:filename>')

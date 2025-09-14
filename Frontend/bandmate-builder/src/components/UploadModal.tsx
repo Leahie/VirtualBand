@@ -8,15 +8,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Upload, File, X, Music, Mic, Video, Loader2 } from "lucide-react";
-import { Upload, File as FileIcon, X, Music, Mic, Video } from "lucide-react";
+import { Upload, File, X, Music, Mic, Video } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import {uploadFileAndCreateBand, uploadFileToS3} from "@/lib/api";
@@ -170,47 +162,17 @@ export const UploadModal: React.FC<UploadModalProps> = ({
       return;
     }
 
-  try {
-    console.log('Starting upload process...', uploadedFiles, bandName);
-    
-    // Create FormData for upload
-    const formData = new FormData();
-    formData.append("file", uploadedFiles[0].file);
-    formData.append("bandName", bandName);
-    
-    console.log('FormData created, uploading to S3...');
-    
-    // Upload to S3 first
-    const uploadResult = await uploadFileToS3(formData);
-    console.log('Upload result:', uploadResult);
-    
-    // Create band with S3 URL
-    console.log('Creating band with S3 URL:', uploadResult.s3_url);
-    await uploadFileAndCreateBand(uploadResult.s3_url, bandName);
-    
-    // Show success toast
+    // Here you would typically process the files and create the band
     toast({
       title: "Band created successfully!",
-      description: `${bandName} has been created and is ready to use.`,
+      description: `${bandName} is being processed. You'll be notified when it's ready.`,
     });
-
+    
     // Reset form
     setBandName("");
     setUploadedFiles([]);
     onClose();
-    
-    // Navigate to new-band page
-    navigate("/new-band");
-    
-  } catch (error) {
-    console.error('Error creating band:', error);
-    toast({
-      title: "Failed to create band",
-      description: error instanceof Error ? error.message : "Something went wrong. Please try again.",
-      variant: "destructive"
-    });
-  }
-};
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>

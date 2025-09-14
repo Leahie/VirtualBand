@@ -1,14 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Plus,
-  Music,
-  Users,
-  Calendar,
-  MoreVertical,
-  Upload, Loader2,
-} from "lucide-react";
+import { Plus, Music, Users, Calendar, MoreVertical, Upload, Loader2 } from "lucide-react";
 import { UploadModal } from "@/components/UploadModal";
 import { getBands, deleteBand } from "@/lib/api";
 
@@ -77,50 +70,6 @@ const Dashboard = () => {
       </div>
     );
   }
-  const [currentView, setCurrentView] = useState<"dashboard" | "band-builder">(
-    "dashboard"
-  );
-  const [bandData, setBandData] = useState<{
-    sessionId: string;
-    userInstrument: string;
-    userMidiPath: string;
-    userWavUrl?: string;
-  } | null>(null);
-
-  const handleUploadComplete = (
-    sessionId: string,
-    userInstrument: string,
-    userMidiPath: string,
-    userWavUrl?: string
-  ) => {
-    setBandData({ sessionId, userInstrument, userMidiPath, userWavUrl });
-    setCurrentView("band-builder");
-  };
-
-  const handleBackToDashboard = () => {
-    setCurrentView("dashboard");
-    setBandData(null);
-  };
-
-  const handleBandComplete = (finalMixPath: string) => {
-    // Handle the completed band - could save to user's bands, show success, etc.
-    console.log("Band completed! Final mix:", finalMixPath);
-    setCurrentView("dashboard");
-    setBandData(null);
-  };
-
-  if (currentView === "band-builder" && bandData) {
-    return (
-      <BandBuilder
-        sessionId={bandData.sessionId}
-        userInstrument={bandData.userInstrument}
-        userMidiPath={bandData.userMidiPath}
-        userWavUrl={bandData.userWavUrl}
-        onComplete={handleBandComplete}
-        onBack={handleBackToDashboard}
-      />
-    );
-  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -151,10 +100,7 @@ const Dashboard = () => {
           <div className="space-y-4">
             <h1 className="text-4xl font-bold">
               Welcome back to your
-              <span className="bg-gradient-primary bg-clip-text text-transparent">
-                {" "}
-                Studio
-              </span>
+              <span className="bg-gradient-primary bg-clip-text text-transparent"> Studio</span>
             </h1>
             <p className="text-xl text-foreground/80">
               Continue working on your bands or create something new
@@ -175,33 +121,14 @@ const Dashboard = () => {
               </CardContent>
             </Card>
             
-            <Card className="bg-gradient-secondary/10 border-accent/20">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <Users className="h-8 w-8 text-accent" />
-                </div>
-              </CardContent>
-            </Card>
-            
-            <Card className="bg-gradient-primary/10 border-primary-glow/20">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-foreground/60">This Week</p>
-                    <p className="text-3xl font-bold text-primary-glow">2</p>
-                  </div>
-                  <Calendar className="h-8 w-8 text-primary-glow" />
-                </div>
-              </CardContent>
-            </Card>
           </div>
 
           {/* Bands Grid */}
           <div className="space-y-6">
             <div className="flex items-center justify-between">
               <h2 className="text-2xl font-bold">Your Bands</h2>
-              <Button
-                variant="outline"
+              <Button 
+                variant="outline" 
                 size="sm"
                 onClick={() => setIsUploadModalOpen(true)}
               >
@@ -212,7 +139,7 @@ const Dashboard = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {/* Create New Band Card */}
-              <Card
+              <Card 
                 className="border-dashed border-2 border-primary/30 hover:border-primary/60 transition-all duration-300 cursor-pointer group bg-gradient-primary/5 hover:bg-gradient-primary/10"
                 onClick={() => setIsUploadModalOpen(true)}
               >
@@ -273,10 +200,9 @@ const Dashboard = () => {
       </main>
 
       {/* Upload Modal */}
-      <UploadModal
-        isOpen={isUploadModalOpen}
-        onClose={() => setIsUploadModalOpen(false)}
-        onUploadComplete={handleUploadComplete}
+      <UploadModal 
+        isOpen={isUploadModalOpen} 
+        onClose={() => setIsUploadModalOpen(false)} 
       />
     </div>
   );

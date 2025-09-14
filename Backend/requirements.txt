@@ -10,3 +10,12 @@ soundfile
 Flask
 pymongo[srv]
 Flask-PyMongo
+flask
+flask_cors
+anthropic
+mido
+pygame
+numpy
+scipy
+librosa
+soundfile

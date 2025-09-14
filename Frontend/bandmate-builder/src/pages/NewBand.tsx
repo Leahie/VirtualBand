@@ -2,10 +2,10 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Settings, Play, Pause, Square } from "lucide-react";
-import { InstrumentSelector } from "@/components/InstrumentSelector";
 import { MidiEditor } from "@/components/MidiSelector";
 import { AiChatbox } from "@/components/AiChatbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { InstrumentSelector } from "@/components/instrumentSelector";
 
 export default function NewBand() {
   const [progress, setProgress] = useState(25);

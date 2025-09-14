@@ -1,3 +1,15 @@
-Flask
+Flask==2.2.5
+Werkzeug==2.3.7
+Flask_cors
 pymongo[srv]
 Flask-PyMongo
+anthropic
+mido
+pygame
+numpy
+scipy
+librosa
+soundfile
+midiutil
+pyFluidSynth
+boto3

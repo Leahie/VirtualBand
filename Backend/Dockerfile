@@ -2,10 +2,12 @@
 FROM python:3.11-slim
 
 # Set the working directory
-WORKDIR /VirtualBand
+WORKDIR /Backend
 
 # Copy the requirements file first to leverage Docker cache
 COPY ./requirements.txt .
+
+
 
 # Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
@@ -16,12 +18,17 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Expose the port Flask runs on
-EXPOSE 5000
 
 # Set environment variables
 ENV FLASK_ENV=development
 ENV FLASK_APP=app.py
 
 # Run the application
-CMD ["flask", "run", "--host=0.0.0.0"]
+ENV FLASK_APP="band.factory:create_app()" \
+    FLASK_ENV=development \
+    FLASK_RUN_HOST=0.0.0.0 \
+    FLASK_RUN_PORT=5000
 
+EXPOSE 5000
+
+CMD ["flask", "run"]

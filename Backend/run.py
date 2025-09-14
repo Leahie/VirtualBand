@@ -16,3 +16,4 @@ if __name__ == "__main__":
     mongo.init_app(app)
     
     app.run()
+

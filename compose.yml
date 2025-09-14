@@ -1,52 +1,40 @@
-name: sprinternship-project
+name: virtualband
 
 services:
-  proxy:
-    image: nginx:latest
-    restart: unless-stopped
-    volumes:
-      - ./proxy/default.conf.template:/etc/nginx/templates/default.conf.template
-    ports:
-      - "80:80"
 
-  api:
-    build: ./api
+  backend:
+    build: ./Backend
     restart: unless-stopped
     volumes:
-      - ./api:/app/api
+      - ./Backend:/VirtualBand/Backend
     ports:
-      - "5001:5000"
-    env_file:
-      - .env
-    environment:
-      - GOOGLE_APPLICATION_CREDENTIALS=/app/api/rdu-sprinternship-2025-ee7f24ebcd45.json
+      - "5000:5000"
+    depends_on:
+      - database
 
-  frontend:
-    build: ./frontend
-    restart: unless-stopped
-    volumes:
-      - ./frontend/public:/app/frontend/public
-      - ./frontend/src:/app/frontend/src
-      
-      - ./frontend/Dockerfile:/app/frontend/Dockerfile
-      
-      - ./frontend/eslint.config.js:/app/frontend/eslint.config.js
-      
-      - ./frontend/index.html:/app/frontend/index.html
-      - ./frontend/vite.config.js:/app/frontend/vite.config.js
-    ports:
-      - '5173:5173'
-    env_file:
-      - .env
-
-  database:
-    image: mariadb:latest
-    restart: unless-stopped
-    ports:
-      - "3305:3306"
-    env_file:
-      - .env
-    volumes:
-      - "./database/db_schema:/docker-entrypoint-initdb.d"
-      - "./database/data:/var/lib/mysql"
     
+  frontend:
+    build: ./Frontend/bandmate-builder            # context is Frontend/
+    ports:
+      - "3001:3000"
+    volumes:
+      - ./Frontend:/app
+      - /app/node_modules
+    environment:
+      - HOST=0.0.0.0
+  
+  database:
+    image: mongo:latest
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=leahzhang1595995_db_user
+      - MONGO_INITDB_ROOT_PASSWORD=85a881b080ee41c2887ab5547620844c
+    volumes:
+      - mongo_data:/data/db
+    
+volumes:
+  mongo_data: {}
+    
+  

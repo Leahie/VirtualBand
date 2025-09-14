@@ -1,7 +1,7 @@
 import os
 
 from flask import Flask, render_template
-from flask.json import JSONEncoder
+from json import JSONEncoder
 from flask_cors import CORS
 ##from flask_bcrypt import Bcrypt
 ##from flask_jwt_extended import JWTManager
@@ -9,7 +9,7 @@ from flask_cors import CORS
 from bson import json_util, ObjectId
 from datetime import datetime, timedelta
 
-from Backend.band.api.bands import bands_api_v1
+from .api.bands import bands_api_v1
 
 class MongoJsonEncoder(JSONEncoder):
     def default(self, obj):

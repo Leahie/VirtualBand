@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
-from band.db import get_movie, get_movies, get_movies_by_country, \
-    get_movies_faceted, add_comment, update_comment, delete_comment
+from band.db import get_band_workspace_by_name, get_bands, get_band_workspace, add_band_workspace, \
+    delete_band_workspace, update_band_workspace, upload_file_to_s3
 
 from flask_cors import CORS
 from band.api.utils import expect
@@ -12,207 +12,78 @@ bands_api_v1 = Blueprint(
 
 CORS(bands_api_v1)
 
-
+# Pulls up all bands
 @bands_api_v1.route('/', methods=['GET'])
 def api_get_bands():
     BANDS_PER_PAGE = 20
 
-    (bands, total_num_entries) = get_bands(
-        None, page=0, movies_per_page=MOVIES_PER_PAGE)
+    (bands, total_num_entries) = get_bands()
 
     response = {
-        "movies": movies,
+        "bands": bands,
         "page": 0,
         "filters": {},
-        "entries_per_page": MOVIES_PER_PAGE,
+        "entries_per_page": BANDS_PER_PAGE,
         "total_results": total_num_entries,
     }
 
     return jsonify(response)
 
-
-@movies_api_v1.route('/search', methods=['GET'])
-def api_search_movies():
-    DEFAULT_MOVIES_PER_PAGE = 20
-
-    # first determine the page of the movies to collect
-    try:
-        page = int(request.args.get('page', 0))
-    except (TypeError, ValueError) as e:
-        print('Got bad value:\t', e)
-        page = 0
-
-    # determine the filters
-    filters = {}
-    return_filters = {}
-    cast = request.args.getlist('cast')
-    genre = request.args.getlist('genre')
-    if cast:
-        filters["cast"] = cast
-        return_filters["cast"] = cast
-    if genre:
-        filters["genres"] = genre
-        return_filters["genre"] = genre
-    search = request.args.get('text')
-    if search:
-        filters["text"] = search
-        return_filters["search"] = search
-
-    # finally use the database and get what is necessary
-    (movies, total_num_entries) = get_movies(
-        filters, page, DEFAULT_MOVIES_PER_PAGE)
-
-    response = {
-        "movies": movies,
-        "page": page,
-        "filters": return_filters,
-        "entries_per_page": DEFAULT_MOVIES_PER_PAGE,
-        "total_results": total_num_entries
-    }
-
-    return jsonify(response), 200
-
-
-@movies_api_v1.route('/id/<id>', methods=['GET'])
-def api_get_movie_by_id(id):
-    movie = get_movie(id)
-    if movie is None:
+# Shows only specific id 
+@bands_api_v1.route('/id/<id>', methods=['GET'])
+def api_get_band_by_id(id):
+    band = get_band_workspace(id)
+    if band is None:
         return jsonify({
             "error": "Not found"
         }), 400
-    elif movie == {}:
+    elif band == {}:
         return jsonify({
             "error": "uncaught general exception"
         }), 400
     else:
-        updated_type = str(type(movie.get('lastupdated')))
+        updated_type = str(type(band.get('lastupdated')))
         return jsonify(
             {
-                "movie": movie,
+                "band": band,
                 "updated_type": updated_type
             }
         ), 200
 
+# Add element to band database 
+@bands_api_v1.route('/add', methods=['POST'])
+def api_add_band():
+    data = request.json
+    result = add_band_workspace(
+        data['name'], 
+        data['date_created'], 
+        data['date_modified'], 
+        data['original_song'], 
+        data['modified_song']
+    )
+    return jsonify({"inserted_id": str(result.inserted_id)}), 201
 
-@movies_api_v1.route('/countries', methods=['GET'])
-def api_get_movies_by_country():
-    try:
-        countries = request.args.getlist('countries')
-        results = get_movies_by_country(countries)
-        response_object = {
-            "titles": results
-        }
-        return jsonify(response_object), 200
-    except Exception as e:
-        response_object = {
-            "error": str(e)
-        }
-        return jsonify(response_object), 400
-
-
-@movies_api_v1.route('/facet-search', methods=['GET'])
-def api_search_movies_faceted():
-    MOVIES_PER_PAGE = 20
-
-    # first determine the page of the movies to collect
-    try:
-        page = int(request.args.get('page', 0))
-    except (TypeError, ValueError) as e:
-        print('Got bad value for page, defaulting to 0:\t', e)
-        page = 0
-
-    # determine the filters
-    filters = {}
-    return_filters = {}
-    cast = request.args.getlist('cast')
-    if cast:
-        filters["cast"] = cast
-        return_filters["cast"] = cast
-    if not filters:
-        return api_search_movies()
-
-    # finally use the database and get what is necessary
-    try:
-        (movies, total_num_entries) = get_movies_faceted(
-            filters, page, MOVIES_PER_PAGE)
-
-        response = {
-            "movies": movies.get('movies'),
-            "facets":  {
-                "runtime": movies.get('runtime'),
-                "rating": movies.get('rating')
-            },
-            "page": page,
-            "filters": return_filters,
-            "entries_per_page": MOVIES_PER_PAGE,
-            "total_results": total_num_entries,
-        }
-
-        return jsonify(response), 200
-    except Exception as e:
-        return jsonify({'error': str(e)}), 400
+# Edit element in band database 
+@bands_api_v1.route('/edit', methods=['POST'])
+def api_edit_band():
+    data = request.json
+    band_id = data.get('id')
+    result = update_band_workspace(
+        band_id, 
+        data['name'], 
+        data['date_created'], 
+        data['date_modified'], 
+        data['original_song'], 
+        data['modified_song']
+    )
+    return jsonify({"modified_count": str(result.modified_count)}), 200 # modified count is sus, check this spot
 
 
-@movies_api_v1.route('/comment', methods=["POST"])
-#@jwt_required
-def api_post_comment():
-    """
-    Posts a comment about a specific movie. Validates the user is logged in by
-    ensuring a valid JWT is provided
-    """
-    #claims = get_jwt_claims()
-    #user = User.from_claims(claims)
-    post_data = request.get_json()
-    try:
-        movie_id = expect(post_data.get('movie_id'), str, 'movie_id')
-        comment = expect(post_data.get('comment'), str, 'comment')
-        add_comment(movie_id, user, comment, datetime.now())
-        updated_comments = get_movie(movie_id).get('comments')
-        return jsonify({"comments": updated_comments}), 200
-    except Exception as e:
-        return jsonify({'error': str(e)}), 400
-
-
-@movies_api_v1.route('/comment', methods=["PUT"])
-#@jwt_required
-def api_update_comment():
-    """
-    Updates a user comment. Validates the user is logged in by ensuring a
-    valid JWT is provided
-    """
-#    claims = get_jwt_claims()
-    user_email = "jane.doe@example.com"
-    post_data = request.get_json()
-    try:
-        comment_id = expect(post_data.get('comment_id'), str, 'comment_id')
-        updated_comment = expect(post_data.get(
-            'updated_comment'), str, 'updated_comment')
-        movie_id = expect(post_data.get('movie_id'), str, 'movie_id')
-        edit_result = update_comment(
-            comment_id, user_email, updated_comment, datetime.now()
-        )
-        if edit_result.modified_count == 0:
-            raise ValueError("no document updated")
-        updated_comments = get_movie(movie_id).get('comments')
-        return jsonify({"comments": updated_comments}), 200
-    except Exception as e:
-        return jsonify({'error': str(e)}), 400
-
-
-@movies_api_v1.route('/comment', methods=["DELETE"])
-#@jwt_required
-def api_delete_comment():
-    """
-    Delete a comment. Requires a valid JWT
-    """
-#    claims = get_jwt_claims()
-    user_email = "jane.doe@example.com"
-    post_data = request.get_json()
-    try:
-        comment_id = expect(post_data.get('comment_id'), str, 'comment_id')
-        movie_id = expect(post_data.get('movie_id'), str, 'movie_id')
-        delete_comment(comment_id, user_email)
-        updated_comments = get_movie(movie_id).get('comments')
-        return jsonify({'comments': updated_comments}), 200
-    except Exception as e:
-        return jsonify({'error': str(e)}), 400
+# Delete an element in band database 
+@bands_api_v1.route('/delete/<id>', methods=['DELETE'])
+def api_delete_band(id):
+    deleted_count = delete_band_workspace(id)
+    if deleted_count == 1: 
+        return jsonify({"deleted": True}), 200
+    else:
+        return jsonify({"deleted": False, "error": "Not found"}), 404

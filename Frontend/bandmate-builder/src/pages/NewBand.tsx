@@ -1,3 +1,4 @@
+import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -8,6 +9,7 @@ import { AiChatbox } from "@/components/AiChatbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 export default function NewBand() {
+  const navigate = useNavigate();
   const [progress, setProgress] = useState(0);
   const [selectedInstruments, setSelectedInstruments] = useState<string[]>([]);
   const [focusedInstrument, setFocusedInstrument] = useState<string | null>(null);
@@ -52,6 +54,7 @@ export default function NewBand() {
             <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-primary-glow bg-clip-text text-transparent">
               Create New Band
             </h1>
+            
             <div className="flex items-center gap-3">
               <Dialog open={showMidiEditor} onOpenChange={setShowMidiEditor}>
                 <DialogTrigger asChild>
@@ -60,6 +63,9 @@ export default function NewBand() {
                     MIDI Editor
                   </Button>
                 </DialogTrigger>
+                <Button variant="outline" size="sm" onClick={() => navigate("/dashboard")}>
+                    Go Back
+                  </Button>
                 <DialogContent className="max-w-6xl h-[80vh]">
                   <DialogHeader>
                     <DialogTitle>Advanced MIDI Editor</DialogTitle>

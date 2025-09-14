@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Plus, Music, Users, Calendar, MoreVertical, Upload, Loader2 } from "lucide-react";
 import { UploadModal } from "@/components/UploadModal";
-import { getBands } from "@/lib/api";
+import { getBands, deleteBand } from "@/lib/api";
 
 // Define the Band type for better type safety
 interface Band {
@@ -25,6 +25,7 @@ const Dashboard = () => {
       try {
         setIsLoading(true);
         const response = await getBands();
+        console.log(response);
         setBands(response.data.bands || []);
       } catch (err) {
         setError('Failed to fetch bands');
@@ -36,6 +37,17 @@ const Dashboard = () => {
 
     fetchBands();
   }, []);
+
+  const handleDeleteBand = async (id: string) => {
+    console.log(id)
+    try {
+      await deleteBand(id.$oid); // Calls your API
+      setBands(bands.filter(band => band._id !== id)); // Remove from state
+    } catch (err) {
+      setError('Failed to delete band');
+      console.error('Error deleting band:', err);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -109,17 +121,6 @@ const Dashboard = () => {
               </CardContent>
             </Card>
             
-            <Card className="bg-gradient-primary/10 border-primary-glow/20">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-foreground/60">This Week</p>
-                    <p className="text-3xl font-bold text-primary-glow">2</p>
-                  </div>
-                  <Calendar className="h-8 w-8 text-primary-glow" />
-                </div>
-              </CardContent>
-            </Card>
           </div>
 
           {/* Bands Grid */}
@@ -159,42 +160,39 @@ const Dashboard = () => {
 
               {/* Existing Band Cards */}
               {bands.map((band) => (
-                <Card 
+                <>
+                    <Card 
                   key={band.id}
                   className="hover:shadow-glow transition-all duration-300 cursor-pointer group bg-card/50 backdrop-blur-sm border-primary/20"
                 >
-                  <CardHeader className="pb-2">
-                    <div className="flex items-start justify-between">
-                      <div className="space-y-1">
-                        <CardTitle className="text-lg group-hover:text-primary transition-colors">
-                          {band.name}
-                        </CardTitle>
-                        <div className="flex items-center space-x-2 text-sm text-foreground/60">
-                          <Users className="h-3 w-3" />
-                          <span>{band.members} members</span>
-                          <span>•</span>
-                          <span>{band.genre}</span>
+                    <CardHeader className="pb-2">
+                      <div className="flex items-start justify-between">
+                        <div className="space-y-1">
+                          <CardTitle className="text-lg group-hover:text-primary transition-colors">
+                            {band.name}
+                          </CardTitle>
                         </div>
+                        <Button variant="ghost" size="sm">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
                       </div>
-                      <Button variant="ghost" size="sm">
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="w-full h-32 bg-gradient-subtle rounded-lg border border-primary/10 flex items-center justify-center">
-                      <Music className="h-8 w-8 text-foreground/40" />
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-foreground/60">
-                        Modified {band.lastModified}
-                      </span>
-                      <Button variant="ghost" size="sm">
-                        Open
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="w-full h-32 bg-gradient-subtle rounded-lg border border-primary/10 flex items-center justify-center">
+                        <Music className="h-8 w-8 text-foreground/40" />
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-foreground/60">
+                          Modified {band.lastModified}
+                        </span>
+                        <Button variant="ghost" size="sm" onClick={() => handleDeleteBand(band._id)}>
+                          Delete
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </>
+                
               ))}
             </div>
           </div>

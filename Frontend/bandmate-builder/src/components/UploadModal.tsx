@@ -3,8 +3,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Upload, File, X, Music, Mic, Video } from "lucide-react";
+import { Upload, File as FileIcon, X, Music, Mic, Video } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useNavigate } from "react-router-dom";
 
 interface UploadModalProps {
   isOpen: boolean;
@@ -23,6 +24,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => 
   const [bandName, setBandName] = useState("");
   const [isDragOver, setIsDragOver] = useState(false);
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -129,6 +131,9 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => 
     setBandName("");
     setUploadedFiles([]);
     onClose();
+    
+    // Navigate to new-band page
+    navigate("/new-band");
   };
 
   return (
@@ -188,7 +193,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => 
                 <div className="flex items-center justify-center space-x-4">
                   <Button variant="outline" asChild>
                     <label htmlFor="file-upload" className="cursor-pointer">
-                      <File className="h-4 w-4 mr-2" />
+                      <FileIcon className="h-4 w-4 mr-2" />
                       Choose Files
                     </label>
                   </Button>

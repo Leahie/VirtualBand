@@ -17,22 +17,10 @@ from bson.objectid import ObjectId
 from bson.errors import InvalidId
 import boto3
 
+mongo = PyMongo() 
 
 def get_db():
-    """
-    Configuration method to return db instance
-    """
-    db = getattr(g, "_database", None)
-
-    if db is None:
-
-        db = g._database = PyMongo(current_app).db
-       
-    return db
-
-
-# Use LocalProxy to read the global db instance with just `db`
-db = LocalProxy(get_db)
+    return mongo.db
 
 
 def get_band_workspace_by_name(name):
@@ -56,7 +44,7 @@ def get_band_workspace_by_name(name):
         # and _id. Do not include a limit in your own implementation, it is
         # included here to avoid sending 46000 documents down the wire.
         print(f" c: {name}")
-        return list(db.bands.find({},{"name" : 1}))
+        return list(get_db().bands.find({},{"name" : 1}))
 
     except Exception as e:
         return e
@@ -65,14 +53,14 @@ def get_bands():
     """
     Returns a list of all bands
     """
-    return list(db.bands.find({})), db.bands.count_documents({})
+    return list(get_db().bands.find({})), get_db().bands.count_documents({})
 
 def get_band_workspace(id):
     """
     Given a band workspace ID, return a band workspace with that ID.
     """
     try:
-        band = db.bands.find_one({"_id": ObjectId(id)})
+        band = get_db().bands.find_one({"_id": ObjectId(id)})
         return band
     except (InvalidId,Exception):
         return None
@@ -87,17 +75,17 @@ def add_band_workspace(name, date_created, date_modified, original_song, modifie
         "modified_song": modified_song
     }
     validate_band_workspace(band_doc)
-    return db.bands.insert_one(band_doc)
+    return get_db().bands.insert_one(band_doc)
 
 #Delete 
 def delete_band_workspace(band_id):
-    response = db.bands.delete_one({"_id": ObjectId(band_id)})
+    response = get_db().bands.delete_one({"_id": ObjectId(band_id)})
     return response.deleted_count
 
 #Update 
 def update_band_workspace(band_id, name, date_created, date_modified, original_song, modified_song):
-    response = db.bands.update_one(
-        { "band_id": band_id },
+    response = get_db().bands.update_one(
+        { "_id": ObjectId(band_id) },
         { "$set": { "name ": name, "date_created" : date_created, "date_modified": date_modified, "original_song": original_song, "modified_song": modified_song 
         } }
     )

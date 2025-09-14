@@ -1,22 +1,63 @@
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Music, Users, Calendar, MoreVertical, Upload } from "lucide-react";
+import { Plus, Music, Users, Calendar, MoreVertical, Upload, Loader2 } from "lucide-react";
 import { UploadModal } from "@/components/UploadModal";
-import {getBands} from "@/lib/api";
+import { getBands } from "@/lib/api";
 
-// Mock data for existing bands
-const [mockBands, setMockBands] = useState([]);
-
-useEffect(() => {
-  getBands().then((res) => {
-    setMockBands(res.data.bands);
-  });
-}, [])
-
+// Define the Band type for better type safety
+interface Band {
+  id: string;
+  name: string;
+  members: number;
+  genre: string;
+  lastModified: string;
+}
 
 const Dashboard = () => {
+  const [bands, setBands] = useState<Band[]>([]);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchBands = async () => {
+      try {
+        setIsLoading(true);
+        const response = await getBands();
+        setBands(response.data.bands || []);
+      } catch (err) {
+        setError('Failed to fetch bands');
+        console.error('Error fetching bands:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchBands();
+  }, []);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="flex items-center space-x-2">
+          <Loader2 className="h-6 w-6 animate-spin" />
+          <span>Loading your bands...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <p className="text-red-500">{error}</p>
+          <Button onClick={() => window.location.reload()}>Try Again</Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -31,7 +72,6 @@ const Dashboard = () => {
               </span>
             </div>
             <div className="flex items-center space-x-4">
-              {/* <Button variant="outline">Profile</Button> */}
               <Button variant="hero" onClick={() => setIsUploadModalOpen(true)}>
                 <Plus className="h-4 w-4 mr-2" />
                 New Band
@@ -62,7 +102,7 @@ const Dashboard = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-foreground/60">Total Bands</p>
-                    <p className="text-3xl font-bold text-primary">{mockBands.length}</p>
+                    <p className="text-3xl font-bold text-primary">{bands.length}</p>
                   </div>
                   <Music className="h-8 w-8 text-primary" />
                 </div>
@@ -118,7 +158,7 @@ const Dashboard = () => {
               </Card>
 
               {/* Existing Band Cards */}
-              {mockBands.map((band) => (
+              {bands.map((band) => (
                 <Card 
                   key={band.id}
                   className="hover:shadow-glow transition-all duration-300 cursor-pointer group bg-card/50 backdrop-blur-sm border-primary/20"

@@ -130,6 +130,7 @@ def generate_ai_music():
         ai_instrument = data.get('ai_instrument')
         prompt = data.get('prompt', 'Create complementary music')
         user_midi_path = data.get('user_midi_path')
+        is_regeneration = data.get('is_regeneration', False)  # Accept regeneration flag from frontend
         
         if not all([session_id, ai_instrument, user_midi_path]):
             return jsonify({'error': 'Missing required parameters'}), 400
@@ -138,13 +139,21 @@ def generate_ai_music():
         # In a real implementation, you'd analyze the MIDI file
         user_midi_content = f"User's {ai_instrument} music"
         
+        # If not explicitly marked as regeneration, check if file exists
+        if not is_regeneration:
+            existing_file = os.path.join(PUBLIC_AUDIO_FOLDER, f"{session_id}_{ai_instrument}_ai_artist.wav")
+            is_regeneration = os.path.exists(existing_file)
+        
+        print(f"Generating AI music for {ai_instrument}, is_regeneration: {is_regeneration}")
+        
         # Generate AI music
         output_wav = ai_artist(
             prompt_for_ai_artist=prompt,
             ai_artist_instrument=ai_instrument,
             users_midi=user_midi_content,
             users_instrument="user_instrument",
-            session_id=session_id
+            session_id=session_id,
+            is_regeneration=is_regeneration
         )
         
         # Return the public URL for the audio file
@@ -154,10 +163,57 @@ def generate_ai_music():
         return jsonify({
             'success': True,
             'output_wav': public_audio_url,
-            'ai_instrument': ai_instrument
+            'ai_instrument': ai_instrument,
+            'is_regeneration': is_regeneration
         })
     
     except Exception as e:
+        print(f"Error in generate_ai_music: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/regenerate-ai-music', methods=['POST'])
+def regenerate_ai_music():
+    """Regenerate music for a specific AI band member with a new prompt"""
+    try:
+        data = request.get_json()
+        session_id = data.get('session_id')
+        ai_instrument = data.get('ai_instrument')
+        prompt = data.get('prompt', 'Create complementary music')
+        user_midi_path = data.get('user_midi_path')
+        
+        if not all([session_id, ai_instrument, user_midi_path]):
+            return jsonify({'error': 'Missing required parameters'}), 400
+        
+        # For now, just use a placeholder for user MIDI content
+        # In a real implementation, you'd analyze the MIDI file
+        user_midi_content = f"User's {ai_instrument} music"
+        
+        print(f"Regenerating AI music for {ai_instrument} with new prompt: {prompt}")
+        
+        # Force regeneration by setting is_regeneration to True
+        output_wav = ai_artist(
+            prompt_for_ai_artist=prompt,
+            ai_artist_instrument=ai_instrument,
+            users_midi=user_midi_content,
+            users_instrument="user_instrument",
+            session_id=session_id,
+            is_regeneration=True
+        )
+        
+        # Return the public URL for the audio file
+        audio_filename = os.path.basename(output_wav)
+        public_audio_url = f"/audio/{audio_filename}"
+        
+        return jsonify({
+            'success': True,
+            'output_wav': public_audio_url,
+            'ai_instrument': ai_instrument,
+            'is_regeneration': True,
+            'message': f'Successfully regenerated {ai_instrument} music'
+        })
+    
+    except Exception as e:
+        print(f"Error in regenerate_ai_music: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/combine-music', methods=['POST'])

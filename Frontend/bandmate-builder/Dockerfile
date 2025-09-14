@@ -1,15 +1,15 @@
 FROM node:lts
-Set working directory
+# Set working directory
 WORKDIR /Frontend/bandmate-builder
 
 
-install node modules
+# install node modules
 COPY ./package*.json ./
 
 RUN npm install
 
 
-Copy all files from current directory to working dir in image
+# Copy all files from current directory to working dir in image
 COPY . .
 
 EXPOSE 3000

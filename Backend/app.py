@@ -6,6 +6,7 @@ import tempfile
 from werkzeug.utils import secure_filename
 from ai_generated_music import ai_artist
 from extra_functions import get_4_instruments, combine_wav_files
+from mp3_to_midi import simple_mp3_to_midi
 import uuid
 
 app = Flask(__name__)
@@ -50,15 +51,53 @@ def upload_file():
         file_path = os.path.join(UPLOAD_FOLDER, f"{session_id}_{filename}")
         file.save(file_path)
         
-        # For now, we'll assume it's already a MIDI file
-        # In a real implementation, you'd convert audio to MIDI here
-        user_midi_path = file_path
+        # Check file type and convert if needed
+        file_extension = filename.rsplit('.', 1)[1].lower()
+        
+        if file_extension in ['mp3', 'wav']:
+            # Convert audio to MIDI
+            print(f"Converting {file_extension} to MIDI...")
+            midi_filename = f"{session_id}_converted.mid"
+            user_midi_path = os.path.join(UPLOAD_FOLDER, midi_filename)
+            
+            try:
+                simple_mp3_to_midi(file_path, user_midi_path)
+                print(f"Successfully converted to MIDI: {user_midi_path}")
+            except Exception as e:
+                print(f"Error converting audio to MIDI: {e}")
+                return jsonify({'error': f'Failed to convert audio to MIDI: {str(e)}'}), 500
+            
+            # Also convert to WAV and save to public folder for playback
+            print(f"Converting {file_extension} to WAV for playback...")
+            user_wav_filename = f"{session_id}_user_{instrument}.wav"
+            user_wav_path = os.path.join(PUBLIC_AUDIO_FOLDER, user_wav_filename)
+            
+            try:
+                import librosa
+                import soundfile as sf
+                
+                # Load audio and convert to WAV
+                y, sr = librosa.load(file_path, sr=22050)
+                sf.write(user_wav_path, y, sr)
+                print(f"Successfully converted to WAV: {user_wav_path}")
+                
+                # Store the WAV path for later use
+                user_wav_url = f"/audio/{user_wav_filename}"
+                
+            except Exception as e:
+                print(f"Error converting to WAV: {e}")
+                user_wav_url = None
+        else:
+            # Assume it's already a MIDI file
+            user_midi_path = file_path
+            user_wav_url = None
         
         return jsonify({
             'success': True,
             'session_id': session_id,
             'file_path': user_midi_path,
-            'instrument': instrument
+            'instrument': instrument,
+            'user_wav_url': user_wav_url
         })
     
     except Exception as e:

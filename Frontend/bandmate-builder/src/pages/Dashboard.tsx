@@ -84,14 +84,16 @@ const Dashboard = () => {
     sessionId: string;
     userInstrument: string;
     userMidiPath: string;
+    userWavUrl?: string;
   } | null>(null);
 
   const handleUploadComplete = (
     sessionId: string,
     userInstrument: string,
-    userMidiPath: string
+    userMidiPath: string,
+    userWavUrl?: string
   ) => {
-    setBandData({ sessionId, userInstrument, userMidiPath });
+    setBandData({ sessionId, userInstrument, userMidiPath, userWavUrl });
     setCurrentView("band-builder");
   };
 
@@ -113,6 +115,7 @@ const Dashboard = () => {
         sessionId={bandData.sessionId}
         userInstrument={bandData.userInstrument}
         userMidiPath={bandData.userMidiPath}
+        userWavUrl={bandData.userWavUrl}
         onComplete={handleBandComplete}
         onBack={handleBackToDashboard}
       />

@@ -91,7 +91,7 @@ export default function NewBand() {
             </div>
           </div>
 
-          {/* Right Panel - AI Chatbox */}
+          {/* Right Panel - xChatbox */}
           <div className="lg:col-span-1">
             <AiChatbox 
               selectedInstruments={selectedInstruments}

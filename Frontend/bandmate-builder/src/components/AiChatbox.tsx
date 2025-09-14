@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 
 interface AiChatboxProps {
   selectedInstruments: string[];
+  focusedInstrument?: string | null;
   onSuggestionApplied: () => void;
 }
 
@@ -19,7 +20,7 @@ interface Message {
   timestamp: Date;
 }
 
-export function AiChatbox({ selectedInstruments, onSuggestionApplied }: AiChatboxProps) {
+export function AiChatbox({ selectedInstruments, focusedInstrument, onSuggestionApplied }: AiChatboxProps) {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
@@ -107,13 +108,22 @@ export function AiChatbox({ selectedInstruments, onSuggestionApplied }: AiChatbo
   };
 
   return (
-    <Card className="h-min-[600px] flex flex-col">
+    <Card className="h-[600px] flex flex-col">
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-lg">
           <Bot className="w-5 h-5 text-primary" />
           AI Music Producer
         </CardTitle>
-        {selectedInstruments.length > 0 && (
+        {focusedInstrument ? (
+          <div className="mt-2">
+            <Badge className="bg-primary/20 text-primary border-primary/30">
+              Focused: {focusedInstrument}
+            </Badge>
+            <p className="text-xs text-muted-foreground mt-1">
+              Get specific suggestions for your {focusedInstrument} track
+            </p>
+          </div>
+        ) : selectedInstruments.length > 0 ? (
           <div className="flex flex-wrap gap-1 mt-2">
             {selectedInstruments.map((instrument) => (
               <Badge key={instrument} variant="secondary" className="text-xs">
@@ -121,6 +131,10 @@ export function AiChatbox({ selectedInstruments, onSuggestionApplied }: AiChatbo
               </Badge>
             ))}
           </div>
+        ) : (
+          <p className="text-xs text-muted-foreground mt-2">
+            Select instruments to get personalized suggestions
+          </p>
         )}
       </CardHeader>
       

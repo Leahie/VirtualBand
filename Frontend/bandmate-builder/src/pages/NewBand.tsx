@@ -2,20 +2,41 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Settings, Play, Pause, Square } from "lucide-react";
+import { InstrumentSelector } from "@/components/instrumentSelector";
 import { MidiEditor } from "@/components/MidiSelector";
 import { AiChatbox } from "@/components/AiChatbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { InstrumentSelector } from "@/components/instrumentSelector";
 
 export default function NewBand() {
-  const [progress, setProgress] = useState(25);
+  const [progress, setProgress] = useState(0);
   const [selectedInstruments, setSelectedInstruments] = useState<string[]>([]);
+  const [focusedInstrument, setFocusedInstrument] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [showMidiEditor, setShowMidiEditor] = useState(false);
+  const [isGeneratingTrack, setIsGeneratingTrack] = useState(false);
+  const [generatedTracks, setGeneratedTracks] = useState<Record<string, boolean>>({});
 
   const handleInstrumentSelect = (instruments: string[]) => {
     setSelectedInstruments(instruments);
+    setProgress(instruments.length > 0 ? 25 : 0);
+    // Reset focus when selection changes
+    if (focusedInstrument && !instruments.includes(focusedInstrument)) {
+      setFocusedInstrument(null);
+    }
+  };
+
+  const handleInstrumentFocus = (instrumentId: string) => {
+    setFocusedInstrument(instrumentId);
     setProgress(50);
+  };
+
+  const generateTrackForInstrument = async (instrumentId: string) => {
+    setIsGeneratingTrack(true);
+    // Simulate track generation
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    setGeneratedTracks(prev => ({ ...prev, [instrumentId]: true }));
+    setIsGeneratingTrack(false);
+    setProgress(75);
   };
 
   const togglePlayback = () => {
@@ -79,8 +100,46 @@ export default function NewBand() {
           <div className="lg:col-span-2 space-y-6">
             <InstrumentSelector
               selectedInstruments={selectedInstruments}
+              focusedInstrument={focusedInstrument}
               onInstrumentSelect={handleInstrumentSelect}
+              onInstrumentFocus={handleInstrumentFocus}
             />
+            
+            {/* Focused Instrument Panel */}
+            {focusedInstrument && (
+              <div className="bg-card rounded-lg border p-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold capitalize">
+                    {focusedInstrument} Track
+                  </h3>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => generateTrackForInstrument(focusedInstrument)}
+                      disabled={isGeneratingTrack}
+                      size="sm"
+                    >
+                      {isGeneratingTrack ? "Generating..." : "Generate Track"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowMidiEditor(true)}
+                      disabled={!generatedTracks[focusedInstrument]}
+                    >
+                      Edit MIDI
+                    </Button>
+                  </div>
+                </div>
+                
+                {generatedTracks[focusedInstrument] && (
+                  <div className="h-24 bg-primary/5 rounded-lg border border-primary/20 flex items-center justify-center">
+                    <p className="text-primary font-medium">
+                      {focusedInstrument} track generated - Ready for editing
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
             
             {/* Waveform/Timeline Area */}
             <div className="bg-card rounded-lg border p-6">
@@ -91,10 +150,11 @@ export default function NewBand() {
             </div>
           </div>
 
-          {/* Right Panel - xChatbox */}
+          {/* Right Panel - AI Chatbox */}
           <div className="lg:col-span-1">
             <AiChatbox 
               selectedInstruments={selectedInstruments}
+              focusedInstrument={focusedInstrument}
               onSuggestionApplied={() => setProgress(prev => Math.min(prev + 10, 100))}
             />
           </div>

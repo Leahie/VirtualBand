@@ -69,11 +69,6 @@ const BandBuilder: React.FC<BandBuilderProps> = ({
   const [finalMixAudio, setFinalMixAudio] = useState<HTMLAudioElement | null>(
     null
   );
-  const [repromptingMember, setRepromptingMember] = useState<number | null>(
-    null
-  );
-  const [repromptText, setRepromptText] = useState<string>("");
-  const [overallVolume, setOverallVolume] = useState<number>(0.7);
   const { toast } = useToast();
 
   // Generate band members on component mount
@@ -302,115 +297,6 @@ const BandBuilder: React.FC<BandBuilderProps> = ({
     );
   };
 
-  const regenerateMemberMusic = async (index: number) => {
-    const member = bandMembers[index];
-    if (!member || member.instrument.startsWith("Your ")) return; // Don't regenerate user's recording
-
-    // Update member state to show generating
-    setBandMembers((prev) =>
-      prev.map((m, i) => (i === index ? { ...m, isGenerating: true } : m))
-    );
-
-    try {
-      const response = await fetch("/api/generate-ai-music", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          session_id: sessionId,
-          ai_instrument: member.instrument,
-          prompt: member.prompt,
-          user_midi_path: userMidiPath,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        setBandMembers((prev) =>
-          prev.map((m, i) =>
-            i === index
-              ? {
-                  ...m,
-                  wavFile: data.output_wav,
-                  isGenerating: false,
-                  isGenerated: true,
-                }
-              : m
-          )
-        );
-
-        // Create new audio element for the regenerated music
-        const audioUrl = data.output_wav;
-        console.log("Creating new audio element for:", audioUrl);
-
-        // Clean up old audio element
-        const oldAudio = audioRefs[member.instrument];
-        if (oldAudio) {
-          oldAudio.pause();
-          oldAudio.currentTime = 0;
-          // Remove all event listeners by replacing the element
-          oldAudio.src = "";
-        }
-
-        // Add timestamp to force refresh
-        const audioUrlWithTimestamp = `${audioUrl}?t=${Date.now()}`;
-        const audio = new Audio(audioUrlWithTimestamp);
-
-        // Add event listeners
-        audio.addEventListener("play", () => {
-          console.log("Audio started playing:", member.instrument);
-          setPlayingAudio(member.instrument);
-        });
-
-        audio.addEventListener("pause", () => {
-          console.log("Audio paused:", member.instrument);
-          setPlayingAudio(null);
-        });
-
-        audio.addEventListener("ended", () => {
-          console.log("Audio ended:", member.instrument);
-          setPlayingAudio(null);
-        });
-
-        audio.addEventListener("error", (e) => {
-          console.error("Audio error for", member.instrument, ":", e);
-          toast({
-            title: "Audio Error",
-            description: `Could not load audio for ${member.instrument}. Please try regenerating.`,
-            variant: "destructive",
-          });
-        });
-
-        // Update the audio reference immediately
-        setAudioRefs((prev) => {
-          console.log(
-            `Updating audio ref for ${member.instrument} with new URL:`,
-            audioUrl
-          );
-          return { ...prev, [member.instrument]: audio };
-        });
-
-        toast({
-          title: "Success",
-          description: `${member.instrument} music regenerated successfully!`,
-        });
-      } else {
-        throw new Error(data.error || "Failed to regenerate music");
-      }
-    } catch (error) {
-      setBandMembers((prev) =>
-        prev.map((m, i) => (i === index ? { ...m, isGenerating: false } : m))
-      );
-      toast({
-        title: "Error",
-        description: `Failed to regenerate ${member.instrument} music. Please try again.`,
-        variant: "destructive",
-      });
-    }
-  };
-
   const repromptMemberMusic = async (index: number, newPrompt: string) => {
     const member = bandMembers[index];
     if (!member || member.instrument.startsWith("Your ")) return;
@@ -571,9 +457,6 @@ const BandBuilder: React.FC<BandBuilderProps> = ({
 
   const playFinalMix = () => {
     if (finalMixAudio) {
-      // Set volume before playing
-      finalMixAudio.volume = overallVolume;
-
       if (playingAudio === "final-mix") {
         finalMixAudio.pause();
       } else {
@@ -588,39 +471,6 @@ const BandBuilder: React.FC<BandBuilderProps> = ({
           });
         });
       }
-    }
-  };
-
-  const testAudioConnection = async () => {
-    try {
-      console.log("Testing audio connection...");
-      const response = await fetch("/api/health");
-      const data = await response.json();
-      console.log("Health check:", data);
-
-      // Try to load a test audio file
-      const testAudio = new Audio("/audio/test_audio.wav");
-      testAudio.addEventListener("loadstart", () =>
-        console.log("Test audio loading...")
-      );
-      testAudio.addEventListener("canplay", () =>
-        console.log("Test audio can play!")
-      );
-      testAudio.addEventListener("error", (e) =>
-        console.error("Test audio error:", e)
-      );
-
-      toast({
-        title: "Audio Test",
-        description: "Check console for audio connection details",
-      });
-    } catch (error) {
-      console.error("Audio test failed:", error);
-      toast({
-        title: "Audio Test Failed",
-        description: "Could not connect to audio server",
-        variant: "destructive",
-      });
     }
   };
 
@@ -960,31 +810,25 @@ const BandBuilder: React.FC<BandBuilderProps> = ({
                               )}
                             </Button>
                           ) : (
-                            <div className="flex-1 flex space-x-1">
-                              <Button
-                                onClick={() => regenerateMemberMusic(index)}
-                                disabled={member.isGenerating}
-                                variant="outline"
-                                size="sm"
-                              >
-                                {member.isGenerating ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <RotateCcw className="h-4 w-4" />
-                                )}
-                              </Button>
-                              <Button
-                                onClick={() => {
-                                  setRepromptingMember(index);
-                                  setRepromptText(member.prompt);
-                                }}
-                                disabled={member.isGenerating}
-                                variant="outline"
-                                size="sm"
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                            </div>
+                            <Button
+                              onClick={() =>
+                                repromptMemberMusic(index, member.prompt)
+                              }
+                              disabled={member.isGenerating}
+                              className="flex-1"
+                            >
+                              {member.isGenerating ? (
+                                <>
+                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                  Reprompting...
+                                </>
+                              ) : (
+                                <>
+                                  <Edit className="h-4 w-4 mr-2" />
+                                  Reprompt
+                                </>
+                              )}
+                            </Button>
                           )}
                         </div>
                       )}
@@ -1023,72 +867,6 @@ const BandBuilder: React.FC<BandBuilderProps> = ({
               ))}
             </div>
 
-            {/* Reprompt Dialog */}
-            {repromptingMember !== null && (
-              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                <Card className="w-full max-w-md mx-4">
-                  <CardHeader>
-                    <CardTitle>
-                      Reprompt {bandMembers[repromptingMember]?.instrument}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="reprompt-text">New Prompt</Label>
-                      <Textarea
-                        id="reprompt-text"
-                        value={repromptText}
-                        onChange={(e) => setRepromptText(e.target.value)}
-                        placeholder="Enter a new prompt for this AI musician..."
-                        className="min-h-[100px]"
-                      />
-                    </div>
-                    <div className="flex space-x-2">
-                      <Button
-                        onClick={() => {
-                          setRepromptingMember(null);
-                          setRepromptText("");
-                        }}
-                        variant="outline"
-                        className="flex-1"
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        onClick={async () => {
-                          if (repromptText.trim()) {
-                            await repromptMemberMusic(
-                              repromptingMember,
-                              repromptText.trim()
-                            );
-                            setRepromptingMember(null);
-                            setRepromptText("");
-                          }
-                        }}
-                        disabled={
-                          !repromptText.trim() ||
-                          bandMembers[repromptingMember]?.isGenerating
-                        }
-                        className="flex-1"
-                      >
-                        {bandMembers[repromptingMember]?.isGenerating ? (
-                          <>
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            Reprompting...
-                          </>
-                        ) : (
-                          <>
-                            <Edit className="h-4 w-4 mr-2" />
-                            Reprompt
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            )}
-
             {/* Final Mix Section */}
             <div className="mt-12 p-6 bg-gradient-primary/5 border border-primary/20 rounded-lg">
               <div className="text-center space-y-4">
@@ -1104,16 +882,6 @@ const BandBuilder: React.FC<BandBuilderProps> = ({
                 </p>
 
                 <div className="flex justify-center space-x-4">
-                  <Button
-                    variant="outline"
-                    size="lg"
-                    onClick={testAudioConnection}
-                    className="group"
-                  >
-                    <Volume2 className="h-5 w-5 mr-2" />
-                    Test Audio
-                  </Button>
-
                   {playingAudio && (
                     <Button
                       variant="outline"
@@ -1190,48 +958,6 @@ const BandBuilder: React.FC<BandBuilderProps> = ({
                     </div>
                   )}
                 </div>
-
-                {/* Volume Control */}
-                {finalMixPath && (
-                  <div className="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-lg">
-                    <div className="flex items-center space-x-4">
-                      <Label
-                        htmlFor="volume-slider"
-                        className="text-sm font-medium"
-                      >
-                        Volume: {Math.round(overallVolume * 100)}%
-                      </Label>
-                      <input
-                        id="volume-slider"
-                        type="range"
-                        min="0"
-                        max="1"
-                        step="0.1"
-                        value={overallVolume}
-                        onChange={(e) => {
-                          const newVolume = parseFloat(e.target.value);
-                          setOverallVolume(newVolume);
-                          if (finalMixAudio) {
-                            finalMixAudio.volume = newVolume;
-                          }
-                        }}
-                        className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                      />
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setOverallVolume(0.7);
-                          if (finalMixAudio) {
-                            finalMixAudio.volume = 0.7;
-                          }
-                        }}
-                      >
-                        Reset
-                      </Button>
-                    </div>
-                  </div>
-                )}
 
                 {finalMixPath && (
                   <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">

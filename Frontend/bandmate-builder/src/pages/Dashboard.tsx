@@ -1,8 +1,16 @@
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Music, Users, Calendar, MoreVertical, Upload } from "lucide-react";
+import {
+  Plus,
+  Music,
+  Users,
+  Calendar,
+  MoreVertical,
+  Upload,
+} from "lucide-react";
 import { UploadModal } from "@/components/UploadModal";
+import BandBuilder from "./BandBuilder";
 
 // Mock data for existing bands
 const mockBands = [
@@ -12,28 +20,69 @@ const mockBands = [
     members: 4,
     lastModified: "2 days ago",
     genre: "Rock",
-    image: "/api/placeholder/300/200"
+    image: "/api/placeholder/300/200",
   },
   {
     id: 2,
     name: "Electric Dreams",
     members: 3,
-    lastModified: "1 week ago", 
+    lastModified: "1 week ago",
     genre: "Electronic",
-    image: "/api/placeholder/300/200"
+    image: "/api/placeholder/300/200",
   },
   {
     id: 3,
     name: "Jazz Collective",
     members: 5,
     lastModified: "3 days ago",
-    genre: "Jazz", 
-    image: "/api/placeholder/300/200"
-  }
+    genre: "Jazz",
+    image: "/api/placeholder/300/200",
+  },
 ];
 
 const Dashboard = () => {
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [currentView, setCurrentView] = useState<"dashboard" | "band-builder">(
+    "dashboard"
+  );
+  const [bandData, setBandData] = useState<{
+    sessionId: string;
+    userInstrument: string;
+    userMidiPath: string;
+  } | null>(null);
+
+  const handleUploadComplete = (
+    sessionId: string,
+    userInstrument: string,
+    userMidiPath: string
+  ) => {
+    setBandData({ sessionId, userInstrument, userMidiPath });
+    setCurrentView("band-builder");
+  };
+
+  const handleBackToDashboard = () => {
+    setCurrentView("dashboard");
+    setBandData(null);
+  };
+
+  const handleBandComplete = (finalMixPath: string) => {
+    // Handle the completed band - could save to user's bands, show success, etc.
+    console.log("Band completed! Final mix:", finalMixPath);
+    setCurrentView("dashboard");
+    setBandData(null);
+  };
+
+  if (currentView === "band-builder" && bandData) {
+    return (
+      <BandBuilder
+        sessionId={bandData.sessionId}
+        userInstrument={bandData.userInstrument}
+        userMidiPath={bandData.userMidiPath}
+        onComplete={handleBandComplete}
+        onBack={handleBackToDashboard}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -65,7 +114,10 @@ const Dashboard = () => {
           <div className="space-y-4">
             <h1 className="text-4xl font-bold">
               Welcome back to your
-              <span className="bg-gradient-primary bg-clip-text text-transparent"> Studio</span>
+              <span className="bg-gradient-primary bg-clip-text text-transparent">
+                {" "}
+                Studio
+              </span>
             </h1>
             <p className="text-xl text-foreground/80">
               Continue working on your bands or create something new
@@ -79,27 +131,32 @@ const Dashboard = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-foreground/60">Total Bands</p>
-                    <p className="text-3xl font-bold text-primary">{mockBands.length}</p>
+                    <p className="text-3xl font-bold text-primary">
+                      {mockBands.length}
+                    </p>
                   </div>
                   <Music className="h-8 w-8 text-primary" />
                 </div>
               </CardContent>
             </Card>
-            
+
             <Card className="bg-gradient-secondary/10 border-accent/20">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-foreground/60">AI Musicians</p>
                     <p className="text-3xl font-bold text-accent">
-                      {mockBands.reduce((total, band) => total + band.members, 0)}
+                      {mockBands.reduce(
+                        (total, band) => total + band.members,
+                        0
+                      )}
                     </p>
                   </div>
                   <Users className="h-8 w-8 text-accent" />
                 </div>
               </CardContent>
             </Card>
-            
+
             <Card className="bg-gradient-primary/10 border-primary-glow/20">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
@@ -117,8 +174,8 @@ const Dashboard = () => {
           <div className="space-y-6">
             <div className="flex items-center justify-between">
               <h2 className="text-2xl font-bold">Your Bands</h2>
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 size="sm"
                 onClick={() => setIsUploadModalOpen(true)}
               >
@@ -129,7 +186,7 @@ const Dashboard = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {/* Create New Band Card */}
-              <Card 
+              <Card
                 className="border-dashed border-2 border-primary/30 hover:border-primary/60 transition-all duration-300 cursor-pointer group bg-gradient-primary/5 hover:bg-gradient-primary/10"
                 onClick={() => setIsUploadModalOpen(true)}
               >
@@ -150,7 +207,7 @@ const Dashboard = () => {
 
               {/* Existing Band Cards */}
               {mockBands.map((band) => (
-                <Card 
+                <Card
                   key={band.id}
                   className="hover:shadow-glow transition-all duration-300 cursor-pointer group bg-card/50 backdrop-blur-sm border-primary/20"
                 >
@@ -193,9 +250,10 @@ const Dashboard = () => {
       </main>
 
       {/* Upload Modal */}
-      <UploadModal 
-        isOpen={isUploadModalOpen} 
-        onClose={() => setIsUploadModalOpen(false)} 
+      <UploadModal
+        isOpen={isUploadModalOpen}
+        onClose={() => setIsUploadModalOpen(false)}
+        onUploadComplete={handleUploadComplete}
       />
     </div>
   );

@@ -1,0 +1,72 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Backend specific
+Backend/__pycache__/
+Backend/midi2guitar/Lib/site-packages/
+Backend/uploads/
+Backend/band/
+Backend/*.wav
+Backend/*.mid
+Backend/*.midi
+
+# Frontend
+Frontend/*/node_modules/
+Frontend/*/dist/
+Frontend/*/build/
+Frontend/*/.next/
+
+# Audio files
+*.wav
+*.mp3
+*.mid
+*.midi
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+.history/

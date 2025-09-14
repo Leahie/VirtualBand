@@ -1,52 +1,46 @@
-name: sprinternship-project
+name: virtualband
 
 services:
-  proxy:
-    image: nginx:latest
-    restart: unless-stopped
+  backend:
+    build:
+      context: ./Backend
+      dockerfile: Dockerfile
+    working_dir: /app
     volumes:
-      - ./proxy/default.conf.template:/etc/nginx/templates/default.conf.template
+      - ./Backend:/app
+      - ~/.aws:/root/.aws:ro          # <- add this so boto3 can auth via your local AWS profile
+    command: /usr/local/bin/docker-entrypoint.sh   # <- run our entrypoint
     ports:
-      - "80:80"
-
-  api:
-    build: ./api
-    restart: unless-stopped
-    volumes:
-      - ./api:/app/api
-    ports:
-      - "5001:5000"
-    env_file:
+      - "5000:5000"
+    depends_on:
+      - database
+    env_file: 
       - .env
-    environment:
-      - GOOGLE_APPLICATION_CREDENTIALS=/app/api/rdu-sprinternship-2025-ee7f24ebcd45.json
 
+    
   frontend:
-    build: ./frontend
-    restart: unless-stopped
-    volumes:
-      - ./frontend/public:/app/frontend/public
-      - ./frontend/src:/app/frontend/src
-      
-      - ./frontend/Dockerfile:/app/frontend/Dockerfile
-      
-      - ./frontend/eslint.config.js:/app/frontend/eslint.config.js
-      
-      - ./frontend/index.html:/app/frontend/index.html
-      - ./frontend/vite.config.js:/app/frontend/vite.config.js
+    build: ./Frontend/bandmate-builder            # context is Frontend/
     ports:
-      - '5173:5173'
-    env_file:
-      - .env
-
+      - "3001:3000"
+    volumes:
+      - ./Frontend:/app
+      - /app/node_modules
+    environment:
+      - HOST=0.0.0.0
+  
   database:
-    image: mariadb:latest
+    image: mongo:latest
     restart: unless-stopped
     ports:
-      - "3305:3306"
-    env_file:
-      - .env
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=leahzhang1595995_db_user
+      - MONGO_INITDB_ROOT_PASSWORD=85a881b080ee41c2887ab5547620844c
     volumes:
-      - "./database/db_schema:/docker-entrypoint-initdb.d"
-      - "./database/data:/var/lib/mysql"
+      - mongo_data:/data/db
+      - "./Backend/band/db/init:/docker-entrypoint-initdb.d:ro"
+
+    
+volumes:
+  mongo_data: {}
     

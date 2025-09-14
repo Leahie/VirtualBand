@@ -9,8 +9,11 @@ from band.db import mongo
 
 from bson import json_util, ObjectId
 from datetime import datetime, timedelta
+import os 
 
 from band.api.bands import bands_api_v1
+MONGO_URI = os.getenv('MONGO_URI')
+
 
 class MongoJsonEncoder(JSONEncoder):
     def default(self, obj):
@@ -28,7 +31,7 @@ def create_app():
     # TEMPLATE_FOLDER = os.path.join(APP_DIR, 'build')
 
     app = Flask(__name__)
-    app.config["MONGO_URI"] = "mongodb+srv://leahzhang1595995_db_user:TPnwKlk7EeHK24o8@cluster0.x0idehn.mongodb.net/virtualbands?retryWrites=true&w=majority&appName=Cluster0"
+    app.config["MONGO_URI"] = MONGO_URI
     mongo.init_app(app)
 
     CORS(app)

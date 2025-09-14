@@ -48,7 +48,7 @@ const Dashboard = () => {
               </span>
             </div>
             <div className="flex items-center space-x-4">
-              <Button variant="outline">Profile</Button>
+              {/* <Button variant="outline">Profile</Button> */}
               <Button variant="hero" onClick={() => setIsUploadModalOpen(true)}>
                 <Plus className="h-4 w-4 mr-2" />
                 New Band
@@ -82,20 +82,6 @@ const Dashboard = () => {
                     <p className="text-3xl font-bold text-primary">{mockBands.length}</p>
                   </div>
                   <Music className="h-8 w-8 text-primary" />
-                </div>
-              </CardContent>
-            </Card>
-            
-            <Card className="bg-gradient-secondary/10 border-accent/20">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-foreground/60">AI Musicians</p>
-                    <p className="text-3xl font-bold text-accent">
-                      {mockBands.reduce((total, band) => total + band.members, 0)}
-                    </p>
-                  </div>
-                  <Users className="h-8 w-8 text-accent" />
                 </div>
               </CardContent>
             </Card>
@@ -134,7 +120,7 @@ const Dashboard = () => {
                 onClick={() => setIsUploadModalOpen(true)}
               >
                 <CardContent className="p-8 text-center">
-                  <div className="space-y-4">
+                  <div className="space-y-4 pt-10">
                     <div className="w-16 h-16 bg-gradient-primary rounded-full flex items-center justify-center mx-auto group-hover:scale-110 transition-transform">
                       <Plus className="h-8 w-8 text-white" />
                     </div>

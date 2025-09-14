@@ -1,8 +1,21 @@
 import React, { useState, useCallback } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Upload, File, X, Music, Mic, Video, Loader2 } from "lucide-react";
 import { Upload, File as FileIcon, X, Music, Mic, Video } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
@@ -11,19 +24,30 @@ import {uploadFileAndCreateBand, uploadFileToS3} from "@/lib/api";
 interface UploadModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onUploadComplete: (
+    sessionId: string,
+    userInstrument: string,
+    userMidiPath: string
+  ) => void;
 }
 
 interface UploadedFile {
   id: string;
   file: File;
   preview?: string;
-  type: 'audio' | 'video';
+  type: "audio" | "video";
 }
 
-export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => {
+export const UploadModal: React.FC<UploadModalProps> = ({
+  isOpen,
+  onClose,
+  onUploadComplete,
+}) => {
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [bandName, setBandName] = useState("");
+  const [userInstrument, setUserInstrument] = useState("");
   const [isDragOver, setIsDragOver] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -37,90 +61,108 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => 
     setIsDragOver(false);
   }, []);
 
-  const processFiles = useCallback((files: FileList) => {
-    const newFiles: UploadedFile[] = [];
-    
-    Array.from(files).forEach((file) => {
-      const isAudio = file.type.startsWith('audio/');
-      const isVideo = file.type.startsWith('video/');
-      
-      if (isAudio || isVideo) {
-        const uploadedFile: UploadedFile = {
-          id: Math.random().toString(36).substr(2, 9),
-          file,
-          type: isAudio ? 'audio' : 'video'
-        };
-        
-        if (isVideo) {
-          // Create video thumbnail
-          const video = document.createElement('video');
-          video.src = URL.createObjectURL(file);
-          video.onloadeddata = () => {
-            const canvas = document.createElement('canvas');
-            canvas.width = 200;
-            canvas.height = 120;
-            const ctx = canvas.getContext('2d');
-            if (ctx) {
-              ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-              uploadedFile.preview = canvas.toDataURL();
-              setUploadedFiles(prev => [...prev, uploadedFile]);
-            }
-            URL.revokeObjectURL(video.src);
+  const processFiles = useCallback(
+    (files: FileList) => {
+      const newFiles: UploadedFile[] = [];
+
+      Array.from(files).forEach((file) => {
+        const isAudio = file.type.startsWith("audio/");
+        const isVideo = file.type.startsWith("video/");
+
+        if (isAudio || isVideo) {
+          const uploadedFile: UploadedFile = {
+            id: Math.random().toString(36).substr(2, 9),
+            file,
+            type: isAudio ? "audio" : "video",
           };
+
+          if (isVideo) {
+            // Create video thumbnail
+            const video = document.createElement("video");
+            video.src = URL.createObjectURL(file);
+            video.onloadeddata = () => {
+              const canvas = document.createElement("canvas");
+              canvas.width = 200;
+              canvas.height = 120;
+              const ctx = canvas.getContext("2d");
+              if (ctx) {
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                uploadedFile.preview = canvas.toDataURL();
+                setUploadedFiles((prev) => [...prev, uploadedFile]);
+              }
+              URL.revokeObjectURL(video.src);
+            };
+          } else {
+            newFiles.push(uploadedFile);
+          }
         } else {
-          newFiles.push(uploadedFile);
+          toast({
+            title: "Unsupported file type",
+            description: "Please upload audio or video files only.",
+            variant: "destructive",
+          });
         }
-      } else {
-        toast({
-          title: "Unsupported file type",
-          description: "Please upload audio or video files only.",
-          variant: "destructive"
-        });
+      });
+
+      if (newFiles.length > 0) {
+        setUploadedFiles((prev) => [...prev, ...newFiles]);
       }
-    });
-    
-    if (newFiles.length > 0) {
-      setUploadedFiles(prev => [...prev, ...newFiles]);
-    }
-  }, [toast]);
+    },
+    [toast]
+  );
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(false);
-    
-    const files = e.dataTransfer.files;
-    processFiles(files);
-  }, [processFiles]);
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      setIsDragOver(false);
 
-  const handleFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files) {
+      const files = e.dataTransfer.files;
       processFiles(files);
-    }
-  }, [processFiles]);
+    },
+    [processFiles]
+  );
+
+  const handleFileInput = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = e.target.files;
+      if (files) {
+        processFiles(files);
+      }
+    },
+    [processFiles]
+  );
 
   const removeFile = (id: string) => {
-    setUploadedFiles(prev => prev.filter(f => f.id !== id));
+    setUploadedFiles((prev) => prev.filter((f) => f.id !== id));
   };
 
   const handleCreateBand = async () => {
-  if (!bandName.trim()) {
-    toast({
-      title: "Band name required",
-      description: "Please enter a name for your band.",
-      variant: "destructive"
-    });
-    return;
-  }
-  
-  if (uploadedFiles.length === 0) {
-    toast({
-      title: "Recording required",
-      description: "Please upload at least one audio or video file.",
-      variant: "destructive"
-    });
-    return;
-  }
+    if (!bandName.trim()) {
+      toast({
+        title: "Band name required",
+        description: "Please enter a name for your band.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!userInstrument) {
+      toast({
+        title: "Instrument required",
+        description: "Please select the instrument you played.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (uploadedFiles.length === 0) {
+      toast({
+        title: "Recording required",
+        description: "Please upload at least one audio or video file.",
+        variant: "destructive",
+      });
+      return;
+    }
 
   try {
     console.log('Starting upload process...', uploadedFiles, bandName);
@@ -172,7 +214,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => 
             Create New Band
           </DialogTitle>
         </DialogHeader>
-        
+
         <div className="space-y-6">
           {/* Band Name Input */}
           <div className="space-y-2">
@@ -188,12 +230,36 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => 
             />
           </div>
 
+          {/* Instrument Selection */}
+          <div className="space-y-2">
+            <Label htmlFor="instrument" className="text-base font-medium">
+              What instrument did you play?
+            </Label>
+            <Select value={userInstrument} onValueChange={setUserInstrument}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select your instrument..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="piano">Piano</SelectItem>
+                <SelectItem value="guitar">Guitar</SelectItem>
+                <SelectItem value="violin">Violin</SelectItem>
+                <SelectItem value="trumpet">Trumpet</SelectItem>
+                <SelectItem value="drums">Drums</SelectItem>
+                <SelectItem value="bass">Bass</SelectItem>
+                <SelectItem value="saxophone">Saxophone</SelectItem>
+                <SelectItem value="flute">Flute</SelectItem>
+                <SelectItem value="cello">Cello</SelectItem>
+                <SelectItem value="other">Other</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
           {/* File Upload Area */}
           <div className="space-y-4">
             <Label className="text-base font-medium">
               Upload Your Recording
             </Label>
-            
+
             <div
               className={`relative border-2 border-dashed rounded-lg p-8 text-center transition-all duration-300 ${
                 isDragOver
@@ -208,7 +274,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => 
                 <div className="w-16 h-16 bg-gradient-primary rounded-full flex items-center justify-center mx-auto">
                   <Upload className="h-8 w-8 text-white" />
                 </div>
-                
+
                 <div className="space-y-2">
                   <p className="text-lg font-medium">
                     Drag and drop your files here
@@ -217,7 +283,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => 
                     Supports MP3, WAV, MP4, MOV, and other audio/video formats
                   </p>
                 </div>
-                
+
                 <div className="flex items-center justify-center space-x-4">
                   <Button variant="outline" asChild>
                     <label htmlFor="file-upload" className="cursor-pointer">
@@ -226,7 +292,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => 
                     </label>
                   </Button>
                 </div>
-                
+
                 <input
                   id="file-upload"
                   type="file"
@@ -245,7 +311,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => 
               <Label className="text-base font-medium">
                 Uploaded Files ({uploadedFiles.length})
               </Label>
-              
+
               <div className="space-y-2 max-h-48 overflow-y-auto">
                 {uploadedFiles.map((uploadedFile) => (
                   <div
@@ -254,7 +320,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => 
                   >
                     <div className="flex items-center space-x-3">
                       <div className="w-10 h-10 bg-gradient-primary rounded-lg flex items-center justify-center">
-                        {uploadedFile.type === 'audio' ? (
+                        {uploadedFile.type === "audio" ? (
                           <Mic className="h-5 w-5 text-white" />
                         ) : (
                           <Video className="h-5 w-5 text-white" />
@@ -265,11 +331,12 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => 
                           {uploadedFile.file.name}
                         </p>
                         <p className="text-sm text-foreground/60">
-                          {(uploadedFile.file.size / (1024 * 1024)).toFixed(2)} MB
+                          {(uploadedFile.file.size / (1024 * 1024)).toFixed(2)}{" "}
+                          MB
                         </p>
                       </div>
                     </div>
-                    
+
                     <Button
                       variant="ghost"
                       size="sm"
@@ -288,13 +355,27 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => 
             <Button variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <Button 
-              variant="hero" 
+            <Button
+              variant="hero"
               onClick={handleCreateBand}
-              disabled={!bandName.trim() || uploadedFiles.length === 0}
+              disabled={
+                !bandName.trim() ||
+                !userInstrument ||
+                uploadedFiles.length === 0 ||
+                isUploading
+              }
             >
-              <Music className="h-4 w-4 mr-2" />
-              Create Band
+              {isUploading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Creating Band...
+                </>
+              ) : (
+                <>
+                  <Music className="h-4 w-4 mr-2" />
+                  Create Band
+                </>
+              )}
             </Button>
           </div>
         </div>

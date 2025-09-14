@@ -7,3 +7,5 @@ numpy==1.24.3
 scipy==1.11.1
 cerebras-cloud-sdk==1.50.1
 pydub==0.25.1
+librosa==1.7.1
+soundfile==0.12.1

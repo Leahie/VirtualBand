@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -28,8 +29,10 @@ import {
   RotateCcw,
   Square,
   Edit,
+  Share2,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useBandContext } from "@/contexts/BandContext";
 
 interface BandMember {
   instrument: string;
@@ -65,15 +68,25 @@ const BandBuilder: React.FC<BandBuilderProps> = ({
     [key: string]: HTMLAudioElement | null;
   }>({});
   const [playingAudio, setPlayingAudio] = useState<string | null>(null);
-  const [finalMixPath, setFinalMixPath] = useState<string | null>(null);
-  const [finalMixAudio, setFinalMixAudio] = useState<HTMLAudioElement | null>(
-    null
-  );
+  const [overallPrompt, setOverallPrompt] = useState("");
+  const [isProcessingOverallAI, setIsProcessingOverallAI] = useState(false);
   const { toast } = useToast();
+  const navigate = useNavigate();
+  const {
+    finalMixPath,
+    finalMixAudio,
+    setFinalMixPath,
+    setFinalMixAudio,
+    setBandMembers: setContextBandMembers,
+    setSessionId,
+    setUserMidiPath,
+  } = useBandContext();
 
-  // Generate band members on component mount
+  // Generate band members on component mount and set context
   useEffect(() => {
     generateBandMembers();
+    setSessionId(sessionId);
+    setUserMidiPath(userMidiPath);
   }, []);
 
   // Cleanup audio on component unmount
@@ -132,6 +145,7 @@ const BandBuilder: React.FC<BandBuilderProps> = ({
 
           // Create audio element for user's recording
           const userAudio = new Audio(userWavUrl);
+          userAudio.volume = 1.0; // Explicit 100% volume
           userAudio.addEventListener("play", () => {
             console.log("User audio started playing");
             setPlayingAudio(`Your ${userInstrument}`);
@@ -158,6 +172,7 @@ const BandBuilder: React.FC<BandBuilderProps> = ({
         allMembers.push(...aiMembers);
 
         setBandMembers(allMembers);
+        setContextBandMembers(allMembers);
         setCurrentStep(1);
       } else {
         throw new Error(data.error || "Failed to generate band members");
@@ -212,7 +227,7 @@ const BandBuilder: React.FC<BandBuilderProps> = ({
           )
         );
 
-        // Create audio element for playback - now using direct public URL
+        // Create audio element for playback with retry mechanism
         const audioUrl = data.output_wav;
         console.log("Creating audio element for:", audioUrl);
 
@@ -221,48 +236,60 @@ const BandBuilder: React.FC<BandBuilderProps> = ({
         if (oldAudio) {
           oldAudio.pause();
           oldAudio.currentTime = 0;
-          // Remove all event listeners by clearing the src
           oldAudio.src = "";
         }
 
-        // Add timestamp to force refresh
-        const audioUrlWithTimestamp = `${audioUrl}?t=${Date.now()}`;
-        const audio = new Audio(audioUrlWithTimestamp);
+        // Wait a moment for file to be fully written, then create audio element
+        setTimeout(() => {
+          const audio = new Audio();
+          audio.volume = 1.0; // Explicit 100% volume
+          
+          // Set up error handling with retry
+          let retryCount = 0;
+          const maxRetries = 3;
+          
+          const tryLoadAudio = () => {
+            audio.src = `${audioUrl}?t=${Date.now()}&retry=${retryCount}`;
+          };
 
-        // Add event listeners for audio state management
-        audio.addEventListener("play", () => {
-          console.log("Audio started playing:", member.instrument);
-          setPlayingAudio(member.instrument);
-        });
-
-        audio.addEventListener("pause", () => {
-          console.log("Audio paused:", member.instrument);
-          setPlayingAudio(null);
-        });
-
-        audio.addEventListener("ended", () => {
-          console.log("Audio ended:", member.instrument);
-          setPlayingAudio(null);
-        });
-
-        audio.addEventListener("error", (e) => {
-          console.error("Audio error for", member.instrument, ":", e);
-          toast({
-            title: "Audio Error",
-            description: `Could not load audio for ${member.instrument}. Please try regenerating.`,
-            variant: "destructive",
+          audio.addEventListener("error", (e) => {
+            console.error("Audio error for", member.instrument, ":", e);
+            retryCount++;
+            if (retryCount < maxRetries) {
+              console.log(`Retrying audio load for ${member.instrument} (attempt ${retryCount + 1})`);
+              setTimeout(tryLoadAudio, 1000 * retryCount); // Exponential backoff
+            }
           });
-        });
 
-        audio.addEventListener("loadstart", () => {
-          console.log("Audio loading started:", member.instrument);
-        });
+          // Add event listeners for audio state management
+          audio.addEventListener("play", () => {
+            console.log("Audio started playing:", member.instrument);
+            setPlayingAudio(member.instrument);
+          });
 
-        audio.addEventListener("canplay", () => {
-          console.log("Audio can play:", member.instrument);
-        });
+          audio.addEventListener("pause", () => {
+            console.log("Audio paused:", member.instrument);
+            setPlayingAudio(null);
+          });
 
-        setAudioRefs((prev) => ({ ...prev, [member.instrument]: audio }));
+          audio.addEventListener("ended", () => {
+            console.log("Audio ended:", member.instrument);
+            setPlayingAudio(null);
+          });
+
+          audio.addEventListener("loadstart", () => {
+            console.log("Audio loading started:", member.instrument);
+          });
+
+          audio.addEventListener("canplay", () => {
+            console.log("Audio can play:", member.instrument);
+          });
+
+          setAudioRefs((prev) => ({ ...prev, [member.instrument]: audio }));
+
+          // Initial load attempt
+          tryLoadAudio();
+        }, 500); // Wait 500ms for file to be written
 
         toast({
           title: "Success",
@@ -356,6 +383,7 @@ const BandBuilder: React.FC<BandBuilderProps> = ({
         // Add timestamp to force refresh
         const audioUrlWithTimestamp = `${audioUrl}?t=${Date.now()}`;
         const audio = new Audio(audioUrlWithTimestamp);
+        audio.volume = 1.0; // Explicit 100% volume
 
         // Add event listeners
         audio.addEventListener("play", () => {
@@ -375,11 +403,6 @@ const BandBuilder: React.FC<BandBuilderProps> = ({
 
         audio.addEventListener("error", (e) => {
           console.error("Audio error for", member.instrument, ":", e);
-          toast({
-            title: "Audio Error",
-            description: `Could not load audio for ${member.instrument}. Please try again.`,
-            variant: "destructive",
-          });
         });
 
         // Update the audio reference immediately
@@ -403,11 +426,7 @@ const BandBuilder: React.FC<BandBuilderProps> = ({
         prev.map((m, i) => (i === index ? { ...m, isGenerating: false } : m))
       );
 
-      toast({
-        title: "Error",
-        description: `Failed to reprompt ${member.instrument} music. Please try again.`,
-        variant: "destructive",
-      });
+
     }
   };
 
@@ -427,11 +446,6 @@ const BandBuilder: React.FC<BandBuilderProps> = ({
       if (audio.paused) {
         audio.play().catch((error) => {
           console.error("Error playing audio:", error);
-          toast({
-            title: "Playback Error",
-            description: "Could not play the audio file. Please try again.",
-            variant: "destructive",
-          });
         });
       } else {
         audio.pause();
@@ -464,11 +478,7 @@ const BandBuilder: React.FC<BandBuilderProps> = ({
         stopAllAudio();
         finalMixAudio.play().catch((error) => {
           console.error("Error playing final mix:", error);
-          toast({
-            title: "Playback Error",
-            description: "Could not play final mix. Please try again.",
-            variant: "destructive",
-          });
+
         });
       }
     }
@@ -505,6 +515,7 @@ const BandBuilder: React.FC<BandBuilderProps> = ({
 
         // Create audio element for final mix
         const finalMixAudioElement = new Audio(data.final_mix_path);
+        finalMixAudioElement.volume = 1.0; // Explicit 100% volume
         finalMixAudioElement.addEventListener("play", () => {
           console.log("Final mix started playing");
           setPlayingAudio("final-mix");
@@ -543,6 +554,73 @@ const BandBuilder: React.FC<BandBuilderProps> = ({
       });
     } finally {
       setIsCombining(false);
+    }
+  };
+
+  const handleOverallAIDirection = async () => {
+    if (!overallPrompt.trim()) return;
+
+    setIsProcessingOverallAI(true);
+    
+    try {
+      // Call backend to parse the overall prompt and generate individual instructions
+      const response = await fetch("/api/parse-overall-direction", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          overall_prompt: overallPrompt,
+          band_members: bandMembers.map(member => ({
+            instrument: member.instrument,
+            current_prompt: member.prompt
+          }))
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Update each band member's prompt with the AI-generated instructions
+        const updatedMembers = [...bandMembers];
+        data.individual_prompts.forEach((promptData: any) => {
+          const memberIndex = updatedMembers.findIndex(
+            member => member.instrument.toLowerCase() === promptData.instrument.toLowerCase()
+          );
+          if (memberIndex !== -1) {
+            updatedMembers[memberIndex].prompt = promptData.prompt;
+          }
+        });
+
+        setBandMembers(updatedMembers);
+
+        // Auto-generate music for all AI members (not user's recording)
+        for (let i = 0; i < updatedMembers.length; i++) {
+          const member = updatedMembers[i];
+          if (!member.instrument.startsWith("Your ") && member.prompt.trim()) {
+            await generateMemberMusic(i);
+            // Small delay between generations to avoid overwhelming the server
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+        }
+
+        toast({
+          title: "Band Direction Applied",
+          description: "All musicians have received their individual instructions and are generating new music!",
+        });
+      } else {
+        throw new Error(data.error || "Failed to process overall direction");
+      }
+    } catch (error) {
+      console.error("Error processing overall AI direction:", error);
+      console.error("Full error details:", error);
+      toast({
+        title: "Error",
+        description: `Failed to process overall band direction: ${error.message || error}`,
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessingOverallAI(false);
     }
   };
 
@@ -586,6 +664,7 @@ const BandBuilder: React.FC<BandBuilderProps> = ({
           data.final_mix_path
         }?t=${Date.now()}`;
         const finalMixAudioElement = new Audio(finalMixUrlWithTimestamp);
+        finalMixAudioElement.volume = 1.0; // Explicit 100% volume
         finalMixAudioElement.addEventListener("play", () => {
           console.log("Final mix started playing");
           setPlayingAudio("final-mix");
@@ -740,6 +819,47 @@ const BandBuilder: React.FC<BandBuilderProps> = ({
                 Give each band member specific instructions and hear their music
               </p>
             </div>
+
+            {/* Overall AI Conductor */}
+            <Card className="bg-gradient-to-r from-purple-50 to-blue-50 border-purple-200">
+              <CardHeader>
+                <CardTitle className="flex items-center space-x-2">
+                  <Users className="h-5 w-5 text-purple-600" />
+                  <span className="text-purple-800">AI Band Conductor</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="overall-prompt">
+                    Overall Band Direction
+                  </Label>
+                  <Textarea
+                    id="overall-prompt"
+                    value={overallPrompt}
+                    onChange={(e) => setOverallPrompt(e.target.value)}
+                    placeholder="Describe the overall feel and direction for your band... e.g., 'piano should be fast and energetic, guitar slow and melodic, drums bob up and down with a steady rhythm'"
+                    className="min-h-[120px]"
+                  />
+                </div>
+                <Button
+                  onClick={handleOverallAIDirection}
+                  disabled={isProcessingOverallAI || !overallPrompt.trim()}
+                  className="w-full bg-purple-600 hover:bg-purple-700"
+                >
+                  {isProcessingOverallAI ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Processing Band Direction...
+                    </>
+                  ) : (
+                    <>
+                      <Users className="mr-2 h-4 w-4" />
+                      Direct All Musicians
+                    </>
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               {bandMembers.map((member, index) => (
@@ -960,10 +1080,23 @@ const BandBuilder: React.FC<BandBuilderProps> = ({
                 </div>
 
                 {finalMixPath && (
-                  <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
-                    <p className="text-green-700 font-medium">
-                      Final mix created successfully! You can now play it above.
-                    </p>
+                  <div className="mt-4 space-y-4">
+                    <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                      <p className="text-green-700 font-medium">
+                        Final mix created successfully! You can now play it
+                        above.
+                      </p>
+                    </div>
+                    <div className="flex justify-center">
+                      <Button
+                        size="lg"
+                        onClick={() => navigate("/share")}
+                        className="group"
+                      >
+                        <Share2 className="h-5 w-5 mr-2" />
+                        Finish & Share
+                      </Button>
+                    </div>
                   </div>
                 )}
               </div>

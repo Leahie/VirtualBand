@@ -8,6 +8,14 @@ from ai_generated_music import ai_artist
 from extra_functions import get_4_instruments, combine_wav_files
 from mp3_to_midi import simple_mp3_to_midi
 import uuid
+import fal_client
+from cerebras.cloud.sdk import Cerebras
+
+# Set up FAL API key
+os.environ['FAL_KEY'] = 'ce89aa96-02f9-46e6-92c8-c9c1dee07bc8:4bb0be63422148ab16dbf9307a80f26c'
+
+# Set up Cerebras client
+cerebras_client = Cerebras(api_key="csk-8yn4k9rwxtd5vnd659x83ycejcxx66m2j25xpyhyww9twf36")
 
 app = Flask(__name__)
 CORS(app)
@@ -255,6 +263,48 @@ def health_check():
     """Health check endpoint"""
     return jsonify({'status': 'healthy', 'message': 'BandForge API is running'})
 
+@app.route('/api/test-fal', methods=['GET'])
+def test_fal():
+    """Test FAL API connection"""
+    try:
+        if not os.getenv('FAL_KEY'):
+            return jsonify({
+                'success': False,
+                'error': 'FAL_KEY environment variable not set',
+                'message': 'Please set your fal.ai API key as FAL_KEY environment variable'
+            }), 500
+        
+        # Test with a simple prompt
+        result = fal_client.submit(
+            "fal-ai/recraft/v3/text-to-image",
+            arguments={
+                "prompt": "a simple test image",
+                "image_size": "square_hd",
+                "style": "digital_illustration/cover"
+            }
+        )
+        
+        result_data = result.get()
+        
+        if 'images' in result_data and len(result_data['images']) > 0:
+            return jsonify({
+                'success': True,
+                'message': 'FAL API connection successful',
+                'test_image_url': result_data['images'][0]['url']
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'No image generated in test',
+                'result': result_data
+            }), 500
+            
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'FAL API test failed: {str(e)}'
+        }), 500
+
 @app.route('/api/test-audio', methods=['GET'])
 def test_audio():
     """Test audio generation and serving"""
@@ -282,6 +332,342 @@ def test_audio():
             
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+def extract_midi_notes(midi_file_path):
+    """Extract note data from MIDI file for album cover generation"""
+    try:
+        import mido
+        mid = mido.MidiFile(midi_file_path)
+        
+        notes_data = []
+        current_time = 0
+        tempo = 500000  # Default tempo
+        
+        # Get tempo from MIDI
+        for track in mid.tracks:
+            for msg in track:
+                if msg.type == 'set_tempo':
+                    tempo = msg.tempo
+                    break
+        
+        # Extract notes from all tracks
+        for track in mid.tracks:
+            track_time = 0
+            active_notes = {}  # Track note_on events to calculate duration
+            
+            for msg in track:
+                if not msg.is_meta:
+                    current_time_seconds = mido.tick2second(track_time, mid.ticks_per_beat, tempo)
+                    
+                    if msg.type == 'note_on' and msg.velocity > 0:
+                        active_notes[msg.note] = current_time_seconds
+                    elif (msg.type == 'note_off' or (msg.type == 'note_on' and msg.velocity == 0)) and msg.note in active_notes:
+                        start_time = active_notes[msg.note]
+                        duration = current_time_seconds - start_time
+                        notes_data.append({
+                            "name": msg.note,
+                            "duration": round(duration, 2),
+                            "start": round(start_time, 2)
+                        })
+                        del active_notes[msg.note]
+                
+                track_time += msg.time
+        
+        # Sort by start time and return first 8-10 notes for the prompt
+        notes_data.sort(key=lambda x: x["start"])
+        return notes_data[:10]  # Limit to first 10 notes
+        
+    except Exception as e:
+        print(f"Error extracting MIDI notes: {e}")
+        # Return fallback notes if extraction fails
+        return [
+            {"name": 60, "duration": 1.0, "start": 0.0},
+            {"name": 64, "duration": 0.5, "start": 0.0},
+            {"name": 67, "duration": 1.0, "start": 1.5}
+        ]
+
+@app.route('/api/parse-overall-direction', methods=['POST'])
+def parse_overall_direction():
+    try:
+        data = request.get_json()
+        overall_prompt = data.get('overall_prompt', '')
+        band_members = data.get('band_members', [])
+        
+        if not overall_prompt or not band_members:
+            return jsonify({'success': False, 'error': 'Missing overall prompt or band members'})
+        
+        # Create a prompt for the AI to parse the overall direction
+        instruments = [member['instrument'] for member in band_members if not member['instrument'].startswith('Your ')]
+        
+        parsing_prompt = f"""
+You are a professional music conductor and arranger. Follow the external clients input and create UNIQUE, SPECIFIC instructions for each instrument on the style to play (that work together harmoniously).
+
+External clients input: "{overall_prompt}"
+
+Available Instruments: {', '.join(instruments)}
+
+CRITICAL: Follow the instructions/general idea of the external clients input. You can aapt very slightly to ensure they complement each others. Analyze the clients input and assign specific musical roles
+
+You MUST return ONLY a valid JSON object in this exact format:
+{{
+    "individual_prompts": [
+        {{"instrument": "piano", "prompt": "specific unique instruction for piano"}},
+        {{"instrument": "guitar", "prompt": "specific unique instruction for guitar"}},
+        {{"instrument": "drums", "prompt": "specific unique instruction for drums"}},
+        {{"instrument": "bass", "prompt": "specific unique instruction for bass"}}
+    ]
+}}
+
+Examples of GOOD specific instructions:
+- Piano: "Play staccato eighth note chords in the upper register, emphasizing syncopated rhythms"
+- Guitar: "Provide sustained power chords with palm muting, creating a driving rhythm foundation"  
+- Drums: "Focus on snare backbeat with subtle hi-hat variations, maintaining steady 4/4 time"
+- Bass: "Play walking bass lines with quarter note pulse, connecting chord changes smoothly"
+
+DO NOT repeat the same instruction for multiple instruments. Each must be unique and instrument-specific.
+"""
+
+        # Use Cerebras API to parse the direction
+        try:
+            # Call Cerebras to parse the direction
+            response = cerebras_client.chat.completions.create(
+                model="llama3.1-70b",
+                messages=[
+                    {"role": "system", "content": "You are a professional music conductor and arranger. You analyze overall musical directions and create specific, unique instructions for each instrument. Always respond with valid JSON only."},
+                    {"role": "user", "content": parsing_prompt}
+                ],
+                temperature=0.3,  # Lower temperature for more consistent JSON output
+                max_tokens=1500
+            )
+            
+            # Parse the AI response
+            ai_response = response.choices[0].message.content.strip()
+            print(f"Cerebras response: {ai_response}")
+            
+            # Clean up the response to extract JSON
+            import re
+            # Remove any markdown formatting
+            ai_response = re.sub(r'```json\s*', '', ai_response)
+            ai_response = re.sub(r'```\s*$', '', ai_response)
+            
+            # Try to extract JSON from the response
+            json_match = re.search(r'\{.*\}', ai_response, re.DOTALL)
+            if json_match:
+                try:
+                    parsed_response = json.loads(json_match.group())
+                    individual_prompts = parsed_response.get('individual_prompts', [])
+                    
+                    # Validate that we have prompts for the available instruments
+                    if len(individual_prompts) == 0:
+                        raise ValueError("No individual prompts generated")
+                        
+                    # Ensure each prompt is unique and instrument-specific
+                    validated_prompts = []
+                    for prompt_data in individual_prompts:
+                        if prompt_data.get('instrument') in instruments:
+                            validated_prompts.append(prompt_data)
+                    
+                    individual_prompts = validated_prompts if validated_prompts else create_fallback_prompts(overall_prompt, instruments)
+                    
+                except json.JSONDecodeError as e:
+                    print(f"JSON decode error: {e}")
+                    individual_prompts = create_fallback_prompts(overall_prompt, instruments)
+            else:
+                print("No JSON found in response")
+                individual_prompts = create_fallback_prompts(overall_prompt, instruments)
+                
+        except Exception as cerebras_error:
+            print(f"Cerebras error, using fallback: {cerebras_error}")
+            individual_prompts = create_fallback_prompts(overall_prompt, instruments)
+        
+        return jsonify({
+            'success': True,
+            'individual_prompts': individual_prompts
+        })
+        
+    except Exception as e:
+        print(f"Error parsing overall direction: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)})
+
+def create_fallback_prompts(overall_prompt, instruments):
+    """Create fallback prompts with instrument-specific roles if AI parsing fails"""
+    prompts = []
+    
+    # Analyze overall prompt for keywords
+    prompt_lower = overall_prompt.lower()
+    
+    # Define instrument roles based on common musical arrangements
+    instrument_roles = {
+        'piano': {
+            'fast': 'Play rapid arpeggios and melodic runs in the upper register',
+            'slow': 'Play sustained chords and gentle melodic lines',
+            'energetic': 'Play staccato chords with syncopated rhythms',
+            'calm': 'Play soft, flowing melodies with light accompaniment',
+            'default': 'Provide harmonic foundation with chord progressions and melodic embellishments'
+        },
+        'guitar': {
+            'fast': 'Play quick strumming patterns or fingerpicked melodies',
+            'slow': 'Play sustained power chords or gentle fingerpicking',
+            'energetic': 'Play driving rhythm chords with palm muting',
+            'calm': 'Play soft arpeggios or gentle chord progressions',
+            'default': 'Provide rhythmic and harmonic support with chord strumming'
+        },
+        'drums': {
+            'fast': 'Play rapid hi-hat patterns with driving kick and snare',
+            'slow': 'Play steady, simple beats with emphasis on groove',
+            'energetic': 'Play powerful backbeats with dynamic fills',
+            'calm': 'Play soft, subtle rhythms with brushes or light sticks',
+            'default': 'Maintain steady rhythm with backbeat emphasis on 2 and 4'
+        },
+        'bass': {
+            'fast': 'Play walking bass lines with quick note changes',
+            'slow': 'Play sustained root notes with occasional melodic movement',
+            'energetic': 'Play punchy, rhythmic bass lines that drive the beat',
+            'calm': 'Play smooth, flowing bass lines with gentle movement',
+            'default': 'Provide rhythmic and harmonic foundation with root note emphasis'
+        },
+        'violin': {
+            'fast': 'Play rapid melodic passages and virtuosic runs',
+            'slow': 'Play sustained, lyrical melodies with expressive bowing',
+            'energetic': 'Play dynamic melodies with strong bow attacks',
+            'calm': 'Play gentle, flowing melodies with soft dynamics',
+            'default': 'Provide melodic lines and harmonic support'
+        },
+        'saxophone': {
+            'fast': 'Play quick melodic lines and jazz-style runs',
+            'slow': 'Play smooth, sustained melodies with vibrato',
+            'energetic': 'Play bold, powerful melodic statements',
+            'calm': 'Play soft, breathy tones with gentle phrasing',
+            'default': 'Provide melodic solos and harmonic support'
+        }
+    }
+    
+    # Determine overall mood/tempo from prompt
+    mood = 'default'
+    if any(word in prompt_lower for word in ['fast', 'quick', 'rapid', 'energetic']):
+        mood = 'fast' if any(word in prompt_lower for word in ['fast', 'quick', 'rapid']) else 'energetic'
+    elif any(word in prompt_lower for word in ['slow', 'gentle', 'calm', 'soft']):
+        mood = 'slow' if any(word in prompt_lower for word in ['slow']) else 'calm'
+    elif any(word in prompt_lower for word in ['energetic', 'powerful', 'driving']):
+        mood = 'energetic'
+    
+    # Generate specific prompts for each instrument
+    for instrument in instruments:
+        instrument_lower = instrument.lower()
+        
+        # Check if instrument is specifically mentioned in prompt
+        if instrument_lower in prompt_lower:
+            # Extract context around the instrument mention
+            words = prompt_lower.split()
+            for i, word in enumerate(words):
+                if instrument_lower in word:
+                    # Get surrounding context
+                    start = max(0, i-3)
+                    end = min(len(words), i+5)
+                    context = ' '.join(words[start:end])
+                    prompt = f"Based on '{context}', play accordingly with {instrument} characteristics"
+                    break
+            else:
+                # Use role-based prompt
+                roles = instrument_roles.get(instrument_lower, instrument_roles['default'])
+                if isinstance(roles, dict):
+                    prompt = roles.get(mood, roles['default'])
+                else:
+                    prompt = roles
+        else:
+            # Use role-based prompt for the determined mood
+            roles = instrument_roles.get(instrument_lower)
+            if roles and isinstance(roles, dict):
+                prompt = roles.get(mood, roles['default'])
+            else:
+                prompt = f"Complement the overall direction with {instrument} in a {mood} style"
+        
+        prompts.append({
+            'instrument': instrument,
+            'prompt': prompt
+        })
+    
+    return prompts
+
+@app.route('/api/generate-album-cover', methods=['POST'])
+def generate_album_cover():
+    """Generate an AI album cover using Recraft V3 with MIDI-based prompts"""
+    try:
+        data = request.get_json()
+        session_id = data.get('session_id', '')
+        user_midi_path = data.get('user_midi_path', '')
+        custom_prompt = data.get('prompt', '')
+        
+        if not session_id and not custom_prompt:
+            return jsonify({'error': 'Session ID or custom prompt is required'}), 400
+        
+        # Check if FAL_KEY is set
+        if not os.getenv('FAL_KEY'):
+            return jsonify({
+                'error': 'FAL_KEY environment variable not set. Please set your fal.ai API key as FAL_KEY environment variable.'
+            }), 500
+        
+        # Build the prompt based on available data
+        if custom_prompt:
+            # Use custom prompt if provided
+            final_prompt = custom_prompt
+        else:
+            # Generate MIDI-based prompt
+            if user_midi_path and os.path.exists(user_midi_path):
+                # Extract MIDI notes from user's file
+                midi_notes = extract_midi_notes(user_midi_path)
+                
+                # Format notes for the prompt
+                notes_str = ", ".join([f'{{ "name": {note["name"]}, "duration": {note["duration"]}, "start": {note["start"]} }}' for note in midi_notes])
+                
+                # Create the dynamic prompt
+                final_prompt = f"""Extract the overall vibe from my songs beat (midi format) below: {notes_str}. I am a popular music artist. Generate a cool album cover that looks aesthetic and matches my songs overall vibe."""
+            else:
+                # Fallback prompt if no MIDI file
+                final_prompt = "Generate a cool aesthetic album cover for a popular music artist with a modern, vibrant style."
+        
+        # Generate album cover using Recraft V3
+        print(f"Generating album cover with prompt: {final_prompt}")
+        
+        try:
+            result = fal_client.submit(
+                "fal-ai/recraft/v3/text-to-image",
+                arguments={
+                    "prompt": final_prompt,
+                    "image_size": "square_hd",
+                    "style": "digital_illustration/cover",
+                    "enable_safety_checker": True
+                }
+            )
+            
+            print(f"Submitted request, getting result...")
+            # Get the result
+            result_data = result.get()
+            print(f"Result data: {result_data}")
+            
+            if 'images' in result_data and len(result_data['images']) > 0:
+                image_url = result_data['images'][0]['url']
+                print(f"Generated image URL: {image_url}")
+                
+                return jsonify({
+                    'success': True,
+                    'image_url': image_url,
+                    'message': 'Album cover generated successfully',
+                    'prompt_used': final_prompt
+                })
+            else:
+                print(f"No images in result: {result_data}")
+                return jsonify({'error': 'No image generated in response'}), 500
+                
+        except Exception as api_error:
+            print(f"FAL API error: {str(api_error)}")
+            return jsonify({'error': f'FAL API error: {str(api_error)}'}), 500
+    
+    except Exception as e:
+        print(f"Error generating album cover: {str(e)}")
+        return jsonify({'error': f'Failed to generate album cover: {str(e)}'}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

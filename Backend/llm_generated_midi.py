@@ -21,7 +21,7 @@ def llm_generated_midi(starting_prompt, output_midi_file, instrument_name):
 
     You should generate a midi formatted json output of the following format, make sure that it has a reasonable TIME LENGTH (around 5 seconds):
 
-    Your response should be in the following format (each object representing a musical note):
+    Your response must strictly be in the following format (each object representing a musical note):
     [
     {{
         "name": [an integer, 0 - 127, be sure not exceed this range, and focus most of your answers outside the extremes],
@@ -33,7 +33,7 @@ def llm_generated_midi(starting_prompt, output_midi_file, instrument_name):
     }}
     ]
 
-    Your output must contain this json formatted output and the json alone, under no circumstances should extra characters or confirmations be added. Also make sure that the json outputted will be complete, and no curly braces, strings, or brackets remain hanging."""
+    Your output must contain this array with the json formatted output and the json alone, under no circumstances should extra characters or confirmations be added. Also make sure that the json outputted will be complete, and no curly braces, strings, or brackets remain hanging. Ensure that is a valid array with the json items inside and that is the ONLY thing outputted"""
 
     response = client.chat.completions.create(
         messages=[{"role": "user", "content": generatePrompt}],
@@ -76,17 +76,33 @@ def llm_generated_midi(starting_prompt, output_midi_file, instrument_name):
     mid.tracks.append(track)
     track.append(mido.MetaMessage('set_tempo', tempo=mido.bpm2tempo(tempo)))
 
+    # Sort notes by start time to ensure proper timing
+    notes.sort(key=lambda x: float(x["start"]))
+    
+    current_time = 0
+    ticks_per_quarter = 480
+    
     for note_data in notes:
         note_name = int(note_data["name"])
+        # Clamp note to valid MIDI range
+        note_name = max(0, min(127, note_name))
+        
         duration = float(note_data["duration"])
         start_time = float(note_data["start"])
         
-        ticks_per_quarter = 480
         start_ticks = int(start_time * ticks_per_quarter)
         duration_ticks = int(duration * ticks_per_quarter)
         
-        track.append(mido.Message('note_on', channel=channel, note=note_name, velocity=80, time=start_ticks))
+        # Calculate delta time from current position
+        delta_time = max(0, start_ticks - current_time)
+        
+        # Add note on message
+        track.append(mido.Message('note_on', channel=channel, note=note_name, velocity=80, time=delta_time))
+        current_time = start_ticks
+        
+        # Add note off message
         track.append(mido.Message('note_off', channel=channel, note=note_name, velocity=0, time=duration_ticks))
+        current_time += duration_ticks
 
     mid.save(output_midi_file)
 
